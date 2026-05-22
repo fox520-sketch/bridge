@@ -1,4 +1,4 @@
-const BUILD = "bridge-v1.0.8-ai-notes-hand-record";
+const BUILD = "bridge-v1.0.9-mobile-result-scroll";
 const ROOM_SCHEMA_VERSION = 53;
 const SEATS = [
   { id: 0, key: "N", name: "北", team: "NS" },

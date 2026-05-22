@@ -1,3 +1,10 @@
+# v1.0.9-mobile-result-scroll
+
+- 修正手機版結果視窗過高時底部被 Android / iOS 導航列截掉。
+- 結果彈窗改為受視窗高度限制，內容可垂直捲動。
+- 手機版結果按鈕列加上底部安全區域與 sticky 固定，方便點擊「繼續／再玩一副」。
+- 更新 Service Worker 快取版本。
+
 # v1.0.8-ai-notes-hand-record
 
 - 新增手牌牌力摘要。
