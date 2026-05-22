@@ -1,3 +1,10 @@
+# v1.0.12-two-second-pacing
+
+- AI 叫牌等待時間由 3 秒改為 2 秒。
+- AI 出牌等待時間由 3 秒改為 2 秒。
+- 一墩四張牌出完後，桌面清桌等待時間由 3 秒改為 2 秒。
+- 更新 Service Worker 快取版本。
+
 # v1.0.11-global-red-suits
 
 - 全域修正 UI 中的花色顏色：凡是顯示 ♥ 或 ♦ 都套用紅色。
@@ -36,15 +43,15 @@
 
 ## v1.0.6-trick-clear-delay
 
-- 一墩四張牌出完後，牌桌會保留最後一墩 3 秒再自動收牌，方便看清最後一位玩家出了哪張牌。
+- 一墩四張牌出完後，牌桌會保留最後一墩 2 秒再自動收牌，方便看清最後一位玩家出了哪張牌。
 - 暫停收牌期間會顯示「本墩完成」狀態，避免真人或 AI 立即進入下一墩。
-- 保留 v1.0.5 的 AI 叫牌 / 出牌 3 秒真人模擬延遲。
+- 保留 v1.0.5 的 AI 叫牌 / 出牌 2 秒真人模擬延遲。
 - 更新 Service Worker 快取版本為 `contract-bridge-v1-0-6-trick-clear-delay`。
 
 # Bridge Firebase Game Release Notes
 
 ## v1.0.5-ai-human-delay
-- AI 叫牌與出牌改為等待 3 秒後才執行，讓電腦玩家節奏更像真人。
+- AI 叫牌與出牌改為等待 2 秒後才執行，讓電腦玩家節奏更像真人。
 - 真人玩家操作不延遲；只有座位類型為電腦時才套用等待。
 - 更新 Service Worker 快取版本為 `contract-bridge-v1-0-5-ai-human-delay`。
 

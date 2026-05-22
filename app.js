@@ -1,4 +1,4 @@
-const BUILD = "bridge-v1.0.11-global-red-suits";
+const BUILD = "bridge-v1.0.12-two-second-pacing";
 const ROOM_SCHEMA_VERSION = 55;
 const SEATS = [
   { id: 0, key: "N", name: "北", team: "NS" },
@@ -16,8 +16,8 @@ const SUITS = {
 const SUIT_ORDER = ["C", "D", "H", "S", "NT"];
 const RANKS = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"];
 const HCP = { A: 4, K: 3, Q: 2, J: 1 };
-const AI_ACTION_DELAY_MS = 3000;
-const TRICK_CLEAR_DELAY_MS = 3000;
+const AI_ACTION_DELAY_MS = 2000;
+const TRICK_CLEAR_DELAY_MS = 2000;
 const PRESENCE_HEARTBEAT_MS = 10000;
 const PRESENCE_OFFLINE_MS = 25000;
 const STORAGE = {
@@ -955,7 +955,7 @@ function applyPlay(game, action, settings) {
     };
     game.currentPlayer = winner;
     game.phase = "trickPause";
-    game.log.push(`第 ${trickNo} 墩已完成，${seatName(winner)} 暫時領先。3 秒後收牌。`);
+    game.log.push(`第 ${trickNo} 墩已完成，${seatName(winner)} 暫時領先。2 秒後收牌。`);
   } else {
     game.currentPlayer = nextSeat(seat);
   }
@@ -1286,7 +1286,7 @@ function renderPhase(game) {
     auction: ["叫牌階段", `${seatName(game.currentPlayer)} 叫牌。`],
     openingLead: ["首攻", `${seatName(game.openingLeader)} 首攻；夢家要等首攻翻開後才亮牌。`],
     play: ["打牌階段", `${seatName(game.currentPlayer)} 出牌。`],
-    trickPause: ["本墩完成", `最後一張牌已出，保留桌面 3 秒後由 ${seatName(game.currentPlayer)} 收牌。`],
+    trickPause: ["本墩完成", `最後一張牌已出，保留桌面 2 秒後由 ${seatName(game.currentPlayer)} 收牌。`],
     scoring: ["本副結束", game.result?.summary || "已結算。"]
   };
   const [title, help] = phaseMap[game.phase] || ["準備中", "等待同步。"];
@@ -1446,7 +1446,7 @@ function renderTable(room) {
     playEl.innerHTML = play ? cardHtml(play.card, { small: false, winning: isWinningCard }) : "";
   }
   const liveWinner = currentWinningPlay(game.currentTrick || [], game.contract?.suit);
-  $("trickArea").innerHTML = game.phase === "trickPause" && game.pendingTrick ? `<span class="pill winning-pill">本墩完成｜${seatName(game.pendingTrick.winner)} 贏，3 秒後清桌</span>` : (game.currentTrick?.length ? `<span class="pill winning-pill">本墩 ${game.currentTrick.length}/4｜目前最大：${seatName(liveWinner?.seat)} ${liveWinner?.card ? cardTextHtml(liveWinner.card) : ""}</span>` : `<span class="pill">等待出牌</span>`);
+  $("trickArea").innerHTML = game.phase === "trickPause" && game.pendingTrick ? `<span class="pill winning-pill">本墩完成｜${seatName(game.pendingTrick.winner)} 贏，2 秒後清桌</span>` : (game.currentTrick?.length ? `<span class="pill winning-pill">本墩 ${game.currentTrick.length}/4｜目前最大：${seatName(liveWinner?.seat)} ${liveWinner?.card ? cardTextHtml(liveWinner.card) : ""}</span>` : `<span class="pill">等待出牌</span>`);
   $("kittyArea").innerHTML = game.phase === "auction" ? auctionSummaryHtml(game.auction) : "";
 }
 function isSeatHandVisible(game, seat, mySeat) {
@@ -1500,7 +1500,7 @@ function handHintText(game, seat, canAct) {
   if (game.phase === "auction") return canAct ? "輪到你叫牌。可 Pass、叫價，符合條件時可 Double / Redouble。" : `等待 ${seatName(game.currentPlayer)} 叫牌。`;
   if (game.phase === "openingLead") return canAct ? "請選一張牌首攻。可出的牌會上移並高亮。" : `等待 ${seatName(game.currentPlayer)} 首攻。`;
   if (game.phase === "play") return canAct ? legalPlayHint(game, seat) : `等待 ${seatName(game.currentPlayer)} 出牌。`;
-  if (game.phase === "trickPause") return "本墩四張牌已出完，桌面會保留 3 秒再收牌。";
+  if (game.phase === "trickPause") return "本墩四張牌已出完，桌面會保留 2 秒再收牌。";
   return "本副已結算。";
 }
 function legalPlayHint(game, seat) {
@@ -1548,7 +1548,7 @@ function renderActions(room) {
     return;
   }
   if (game.phase === "trickPause") {
-    panel.append(actionNote("本墩已出完，保留桌面 3 秒後自動收牌。"));
+    panel.append(actionNote("本墩已出完，保留桌面 2 秒後自動收牌。"));
     return;
   }
   if (game.phase === "scoring") {
@@ -1637,7 +1637,7 @@ function renderTips(game, room) {
   else tips.push("閉手變體：沒有夢家亮牌，四個座位都只能看自己的牌，輪到誰就由該座位自行出牌。");
   if (game.phase === "auction") tips.push("叫牌目標是判斷我方能贏幾墩。1 階要 7 墩，4 階要 10 墩，7 階要 13 墩。NT 最高，其次 ♠、♥、♦、♣。");
   if (["openingLead", "play"].includes(game.phase)) tips.push("出牌時若手上有首引花色，就必須跟該花色。沒有時才可墊牌或用王牌將吃。");
-  if (game.phase === "trickPause") tips.push("本墩四張牌會停留 3 秒，方便確認最後一位玩家出了哪張牌。")
+  if (game.phase === "trickPause") tips.push("本墩四張牌會停留 2 秒，方便確認最後一位玩家出了哪張牌。")
   $("playerTips").innerHTML = tips.map((t) => `<p>${colorizeSuitsHtml(t)}</p>`).join("");
   applyPlayerHintsVisible(getBool(STORAGE.hints, true));
 }
