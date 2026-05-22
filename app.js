@@ -1,5 +1,5 @@
-const BUILD = "bridge-v1.0.10-current-winning-card";
-const ROOM_SCHEMA_VERSION = 54;
+const BUILD = "bridge-v1.0.11-global-red-suits";
+const ROOM_SCHEMA_VERSION = 55;
 const SEATS = [
   { id: 0, key: "N", name: "北", team: "NS" },
   { id: 1, key: "E", name: "東", team: "EW" },
@@ -1291,7 +1291,7 @@ function renderPhase(game) {
   };
   const [title, help] = phaseMap[game.phase] || ["準備中", "等待同步。"];
   $("phaseTitle").textContent = title;
-  $("phaseHelp").textContent = help;
+  $("phaseHelp").innerHTML = colorizeSuitsHtml(help);
 }
 function renderContract(game) {
   const lines = [];
@@ -1306,9 +1306,9 @@ function renderContract(game) {
     lines.push(["合約", "尚未成立"]);
   }
   lines.push(["目前墩數", `南北 ${game.tricksWon.NS || 0}｜東西 ${game.tricksWon.EW || 0}`]);
-  $("contractInfo").innerHTML = lines.map(([k, v]) => `<div class="contract-row"><span>${escapeHtml(k)}</span><b>${escapeHtml(v)}</b></div>`).join("");
+  $("contractInfo").innerHTML = lines.map(([k, v]) => `<div class="contract-row"><span>${escapeHtml(k)}</span><b>${colorizeSuitsHtml(v)}</b></div>`).join("");
   $("tableTrump").classList.toggle("hidden", !game.contract);
-  $("tableTrump").textContent = game.contract ? `${contractText(game.contract, game.declarer)}` : "";
+  $("tableTrump").innerHTML = game.contract ? colorizeSuitsHtml(contractText(game.contract, game.declarer)) : "";
   $("tableTeamHeads").classList.toggle("hidden", false);
   $("tableTeamHeads").textContent = `墩數：南北 ${game.tricksWon.NS || 0}｜東西 ${game.tricksWon.EW || 0}`;
 }
@@ -1370,11 +1370,10 @@ function trickRecordHtml(game) {
     </table>
   `;
 }
-function cardTextHtml(card) { return `<span class="card-text ${cardColor(card)}">${escapeHtml(card.rank)}${SUITS[card.suit]?.symbol || ""}</span>`; }
+function cardTextHtml(card) { return `<span class="card-text ${cardColor(card)}">${escapeHtml(card.rank)}${suitSymbolHtml(card.suit)}</span>`; }
 function callTextHtml(call) {
-  const text = callText(call);
-  if (call?.type === "bid") return `<span class="call-text ${call.suit === "H" || call.suit === "D" ? "red" : "black"}">${escapeHtml(text)}</span>`;
-  return `<span class="call-text">${escapeHtml(text)}</span>`;
+  if (call?.type === "bid") return `<span class="call-text ${suitColorClass(call.suit)}">${escapeHtml(call.level)}${suitSymbolHtml(call.suit)}</span>`;
+  return `<span class="call-text">${escapeHtml(callText(call))}</span>`;
 }
 function renderGameRoomStatus(room) {
   const el = $("gameRoomStatus");
@@ -1448,7 +1447,7 @@ function renderTable(room) {
   }
   const liveWinner = currentWinningPlay(game.currentTrick || [], game.contract?.suit);
   $("trickArea").innerHTML = game.phase === "trickPause" && game.pendingTrick ? `<span class="pill winning-pill">本墩完成｜${seatName(game.pendingTrick.winner)} 贏，3 秒後清桌</span>` : (game.currentTrick?.length ? `<span class="pill winning-pill">本墩 ${game.currentTrick.length}/4｜目前最大：${seatName(liveWinner?.seat)} ${liveWinner?.card ? cardTextHtml(liveWinner.card) : ""}</span>` : `<span class="pill">等待出牌</span>`);
-  $("kittyArea").textContent = game.phase === "auction" ? auctionSummary(game.auction) : "";
+  $("kittyArea").innerHTML = game.phase === "auction" ? auctionSummaryHtml(game.auction) : "";
 }
 function isSeatHandVisible(game, seat, mySeat) {
   if (appState.spectator) return game.phase === "scoring" || (game.mode === "standard" && game.dummyVisible && seat === game.dummy);
@@ -1465,7 +1464,7 @@ function renderHand(room) {
   const canAct = control?.canAct ?? false;
   const hand = seat == null ? [] : (game.hands[seat] || []);
   $("handTitle").textContent = seat == null ? "觀戰中" : (seat === mySeat ? "你的手牌" : `你正在指揮 ${seatName(seat)} 的夢家牌`);
-  $("handHint").textContent = handHintText(game, seat, canAct);
+  $("handHint").innerHTML = colorizeSuitsHtml(handHintText(game, seat, canAct));
   $("handCount").textContent = seat == null ? "觀戰" : `${hand.length} 張`;
   renderHandAnalysis(game, seat, canAct);
 
@@ -1532,7 +1531,7 @@ function renderHandAnalysis(game, seat, canAct) {
     [role, "角色"],
   ];
   if (legalCount != null) chips.push([`${legalCount} 張`, "合法出牌"]);
-  el.innerHTML = chips.map(([value, label]) => `<span class="hand-chip"><b>${escapeHtml(value)}</b><small>${escapeHtml(label)}</small></span>`).join("");
+  el.innerHTML = chips.map(([value, label]) => `<span class="hand-chip"><b>${colorizeSuitsHtml(value)}</b><small>${escapeHtml(label)}</small></span>`).join("");
 }
 function renderActions(room) {
   const game = room.game;
@@ -1570,7 +1569,7 @@ function renderAuctionControls(container, game, mySeat, options = {}) {
   if (options.showTitle) {
     const title = document.createElement("div");
     title.className = "auction-control-title";
-    title.innerHTML = `<b>叫牌操作</b><span>${auctionControlStatusText(game, mySeat)}</span>`;
+    title.innerHTML = `<b>叫牌操作</b><span>${colorizeSuitsHtml(auctionControlStatusText(game, mySeat))}</span>`;
     wrap.appendChild(title);
   }
   if (mySeat == null || appState.spectator) {
@@ -1596,6 +1595,7 @@ function renderAuctionControls(container, game, mySeat, options = {}) {
   basic.className = "button-row call-row";
   for (const call of legal.filter((c) => c.type !== "bid")) {
     const btn = button(callText(call), call.type === "pass" ? "primary" : "ghost", () => submitAction({ type: "call", seat: mySeat, call }));
+    btn.innerHTML = callTextHtml(call);
     btn.title = `${seatName(mySeat)} 叫 ${callText(call)}`;
     basic.appendChild(btn);
   }
@@ -1607,6 +1607,7 @@ function renderAuctionControls(container, game, mySeat, options = {}) {
     for (const suit of SUIT_ORDER) {
       const call = { type: "bid", level, suit };
       const btn = button(`${level}${SUITS[suit].symbol}`, "ghost bid-button", () => submitAction({ type: "call", seat: mySeat, call }));
+      btn.innerHTML = `${level}${suitSymbolHtml(suit)}`;
       const ok = legal.some((c) => c.type === "bid" && c.level === level && c.suit === suit);
       btn.disabled = !ok;
       btn.title = ok ? `${seatName(mySeat)} 叫 ${callText(call)}` : "此叫品目前不合法";
@@ -1625,10 +1626,10 @@ function auctionControlStatusText(game, mySeat) {
 }
 
 function button(text, cls, fn) { const b = document.createElement("button"); b.type = "button"; b.className = cls; b.textContent = text; b.addEventListener("click", fn); return b; }
-function actionNote(text) { const p = document.createElement("p"); p.className = "action-note"; p.textContent = text; return p; }
+function actionNote(text) { const p = document.createElement("p"); p.className = "action-note"; p.innerHTML = colorizeSuitsHtml(text); return p; }
 function renderLog(game) {
   const entries = (game.log || []).slice(-80).reverse();
-  $("log").innerHTML = entries.map((line, idx) => `<div class="log-entry"><small>#${entries.length - idx}</small>${escapeHtml(line)}</div>`).join("");
+  $("log").innerHTML = entries.map((line, idx) => `<div class="log-entry"><small>#${entries.length - idx}</small>${colorizeSuitsHtml(line)}</div>`).join("");
 }
 function renderTips(game, room) {
   const tips = [];
@@ -1637,7 +1638,7 @@ function renderTips(game, room) {
   if (game.phase === "auction") tips.push("叫牌目標是判斷我方能贏幾墩。1 階要 7 墩，4 階要 10 墩，7 階要 13 墩。NT 最高，其次 ♠、♥、♦、♣。");
   if (["openingLead", "play"].includes(game.phase)) tips.push("出牌時若手上有首引花色，就必須跟該花色。沒有時才可墊牌或用王牌將吃。");
   if (game.phase === "trickPause") tips.push("本墩四張牌會停留 3 秒，方便確認最後一位玩家出了哪張牌。")
-  $("playerTips").innerHTML = tips.map((t) => `<p>${escapeHtml(t)}</p>`).join("");
+  $("playerTips").innerHTML = tips.map((t) => `<p>${colorizeSuitsHtml(t)}</p>`).join("");
   applyPlayerHintsVisible(getBool(STORAGE.hints, true));
 }
 function maybeShowResult(game) {
@@ -1648,14 +1649,14 @@ function maybeShowResult(game) {
   saveGameResult(game);
   const title = game.result.passedOut ? "四家 Pass" : (game.result.made ? "合約成約" : "合約失敗");
   $("resultTitle").textContent = title;
-  $("resultSubtitle").textContent = game.result.summary;
+  $("resultSubtitle").innerHTML = colorizeSuitsHtml(game.result.summary);
   $("resultStats").innerHTML = [
     ["合約", game.contract ? contractText(game.contract, game.declarer) : "Passed out"],
     ["墩數", `NS ${game.tricksWon.NS || 0}｜EW ${game.tricksWon.EW || 0}`],
     ["分數變動", `NS +${game.result.scoreDelta.NS || 0}｜EW +${game.result.scoreDelta.EW || 0}`],
     ["模式", modeLabel(game.mode)],
     ["計分明細", (game.result.detail || []).join("｜") || "無"]
-  ].map(([k, v]) => `<div class="result-stat ${k === "計分明細" ? "wide" : ""}"><span>${escapeHtml(k)}</span><b>${escapeHtml(v)}</b></div>`).join("");
+  ].map(([k, v]) => `<div class="result-stat ${k === "計分明細" ? "wide" : ""}"><span>${escapeHtml(k)}</span><b>${colorizeSuitsHtml(v)}</b></div>`).join("");
   $("resultNewDeal").disabled = !(appState.offline || isHost());
   $("resultOverlay").classList.remove("hidden");
   playSfx(game.result.made ? "success" : "fail");
@@ -1664,9 +1665,9 @@ function cardHtml(card, opts = {}) {
   const cls = ["card-face", cardColor(card), opts.small ? "small" : "", opts.playable ? "playable" : "", opts.disabled ? "disabled" : "", opts.winning ? "winning-card" : ""].filter(Boolean).join(" ");
   const data = opts.cardId ? ` data-card-id="${escapeHtml(opts.cardId)}" data-seat="${Number(opts.seat)}"` : "";
   const title = opts.winning ? `${card.label}｜目前最大` : card.label;
-  return `<div class="${cls}"${data} title="${escapeHtml(title)}"><span class="rank">${escapeHtml(card.rank)}</span><span class="suit">${SUITS[card.suit].symbol}</span></div>`;
+  return `<div class="${cls}"${data} title="${escapeHtml(title)}"><span class="rank">${escapeHtml(card.rank)}</span><span class="suit ${cardColor(card)}">${SUITS[card.suit].symbol}</span></div>`;
 }
-function miniCardHtml(card) { return `<span class="mini-card ${cardColor(card)}">${escapeHtml(card.rank)}${SUITS[card.suit].symbol}</span>`; }
+function miniCardHtml(card) { return `<span class="mini-card ${cardColor(card)}">${escapeHtml(card.rank)}${suitSymbolHtml(card.suit)}</span>`; }
 function cardColor(card) { return SUITS[card.suit]?.color === "red" ? "red" : "black"; }
 
 function currentGame() { return appState.room?.game || null; }
@@ -1689,8 +1690,18 @@ function contractText(contract, declarer) {
   return `${contract.level}${SUITS[contract.suit].symbol}${dbl}${declarer != null ? ` by ${SEATS[declarer].key}` : ""}`;
 }
 function auctionSummary(auction = []) { return auction.length ? auction.slice(-8).map((c) => `${SEATS[c.seat].key}:${callText(c)}`).join("　") : "尚未叫牌"; }
+function auctionSummaryHtml(auction = []) { return auction.length ? auction.slice(-8).map((c) => `${escapeHtml(SEATS[c.seat].key)}:${callTextHtml(c)}`).join("　") : "尚未叫牌"; }
 function structuredCloneCompat(obj) { return typeof structuredClone === "function" ? structuredClone(obj) : JSON.parse(JSON.stringify(obj)); }
 function escapeHtml(value) { return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;"); }
+function suitColorClass(suit) { return SUITS[suit]?.color === "red" ? "red" : "black"; }
+function suitSymbolHtml(suit) {
+  const meta = SUITS[suit];
+  if (!meta) return escapeHtml(suit || "");
+  return `<span class="suit-symbol ${suitColorClass(suit)}">${escapeHtml(meta.symbol)}</span>`;
+}
+function colorizeSuitsHtml(value) {
+  return escapeHtml(value).replace(/[♥♦♠♣]/g, (symbol) => `<span class="suit-symbol ${symbol === "♥" || symbol === "♦" ? "red" : "black"}">${symbol}</span>`);
+}
 
 async function leaveRoom(silent = false) {
   clearTimeout(appState.botTimer);
@@ -1926,10 +1937,10 @@ async function copyCurrentHandRecord() {
 function openReplayDialog(game) {
   if (!game) return;
   normalizeGame(game);
-  $("replaySummary").textContent = game.result?.summary || `${contractText(game.contract, game.declarer)}｜${modeLabel(game.mode)}`;
+  $("replaySummary").innerHTML = colorizeSuitsHtml(game.result?.summary || `${contractText(game.contract, game.declarer)}｜${modeLabel(game.mode)}`);
   const tricks = listFromFirebase(game.trickHistory);
   $("replayList").innerHTML = [
-    `<div class="replay-item"><b>牌局資訊</b><div class="plays"><span>${modeLabel(game.mode)}</span><span>${vulnerabilityLabel(game.vulnerability)}</span><span>${game.contract ? contractText(game.contract, game.declarer) : "尚未成立"}</span></div></div>`,
+    `<div class="replay-item"><b>牌局資訊</b><div class="plays"><span>${modeLabel(game.mode)}</span><span>${vulnerabilityLabel(game.vulnerability)}</span><span>${colorizeSuitsHtml(game.contract ? contractText(game.contract, game.declarer) : "尚未成立")}</span></div></div>`,
     ...(tricks.length ? tricks.map((trick) => `
       <div class="replay-item">
         <b>第 ${trick.no} 墩：${seatName(trick.winner)} 贏得（${trick.team}）</b>

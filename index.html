@@ -56,7 +56,7 @@
           <h2>開始遊戲</h2>
           <p>可直接單人離線練習，也可以連線 Firebase 建立房間，讓 4 位真人坐北、東、南、西一起玩。不足的人數可由電腦補位。</p>
         </div>
-        <div class="wave">♠ ♥ ♦ ♣</div>
+        <div class="wave"><span class="suit-symbol black">♠</span> <span class="suit-symbol red">♥</span> <span class="suit-symbol red">♦</span> <span class="suit-symbol black">♣</span></div>
       </div>
 
       <div class="public-start-card" aria-label="快速開始">
@@ -396,7 +396,7 @@
         <h2>第一次玩？照這 4 步開始</h2>
         <div class="onboarding-steps">
           <article><b>1</b><div><h3>選模式</h3><p>標準模式是正式橋牌：首攻後夢家亮牌，莊家指揮兩手。閉手模式是變體：夢家不亮，四人各自出牌。</p></div></article>
-          <article><b>2</b><div><h3>叫牌決定合約</h3><p>叫 4♠ 表示黑桃王牌、要贏 10 墩；3NT 表示無王、要贏 9 墩。</p></div></article>
+          <article><b>2</b><div><h3>叫牌決定合約</h3><p>叫 4<span class="suit-symbol black">♠</span> 表示黑桃王牌、要贏 10 墩；3NT 表示無王、要贏 9 墩。</p></div></article>
           <article><b>3</b><div><h3>能跟牌必須跟牌</h3><p>每墩第一張牌決定首引花色；有同花色就必須跟，沒有才可墊牌或將吃。</p></div></article>
           <article><b>4</b><div><h3>結束後看回放</h3><p>本局結算可打開牌局回放，逐墩看誰吃、合約是否完成與分數。</p></div></article>
         </div>
@@ -427,6 +427,7 @@
         <p class="eyebrow">Release</p>
         <h2>本版更新</h2>
         <ul>
+          <li>全域修正花色顏色：紅心 <span class="suit-symbol red">♥</span>、方塊 <span class="suit-symbol red">♦</span> 會在牌桌、紀錄、提示與結果中顯示紅色。</li>
           <li>從拿破崙與秘書改為 4 人合約橋牌。</li>
           <li>新增兩種模式：標準夢家亮牌、閉手四人暗牌變體。</li>
           <li>保留 Firebase 開房間、QR 邀請、觀戰、電腦補位、統計、PWA、分享與維護工具。</li>
@@ -514,7 +515,7 @@
         <p><b>變體模式：</b>取消夢家亮牌，四手暗牌各自出牌。這不是正式合約橋牌，但保留叫牌、跟牌、王牌、贏墩與計分。</p>
         <ul>
           <li>合約階數 1–7，實際需贏 6 + 階數墩。</li>
-          <li>名目高低：♣ &lt; ♦ &lt; ♥ &lt; ♠ &lt; NT。</li>
+          <li>名目高低：<span class="suit-symbol black">♣</span> &lt; <span class="suit-symbol red">♦</span> &lt; <span class="suit-symbol red">♥</span> &lt; <span class="suit-symbol black">♠</span> &lt; NT。</li>
           <li>每墩能跟牌必須跟牌；不能跟才可以墊牌或將吃。</li>
           <li>成局、部分合約、滿貫、超墩、倒約、Double / Redouble 都會自動計分。</li>
         </ul>

@@ -412,3 +412,21 @@ body:not(.log-visible) .log-panel .log { display: none; }
   .hand-analysis { gap: 6px; }
   .hand-chip { border-radius: 14px; padding: 6px 8px; }
 }
+
+/* v1.0.11: global suit coloring. Any rendered ♥ / ♦ should appear red. */
+.suit-symbol.red,
+.card-face .suit.red,
+button .suit-symbol.red,
+.pill .suit-symbol.red,
+.hand-chip .suit-symbol.red,
+.log-entry .suit-symbol.red,
+.replay-item .suit-symbol.red,
+.result-stat .suit-symbol.red { color: #b91c1c; }
+.suit-symbol.black,
+.card-face .suit.black,
+button .suit-symbol.black,
+.pill .suit-symbol.black,
+.hand-chip .suit-symbol.black,
+.log-entry .suit-symbol.black,
+.replay-item .suit-symbol.black,
+.result-stat .suit-symbol.black { color: #111827; }
