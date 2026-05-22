@@ -1,11 +1,19 @@
-
-## bridge-v1.0.1-invite-autojoin
-
-- 修正 QR Code 掃描後沒有自動帶入／加入房間的體驗。
-- 開啟 `?room=XXXXX` 會自動連線 Firebase 並嘗試加入；座位已滿時沿用原本邏輯改為觀戰。
-- 邀請連結產生邏輯改用目前頁面的完整 URL 基底，避免重複或遺失查詢參數。
-
 # Bridge Release Notes
+
+## v1.0.2：叫牌控制修正
+
+- 在手牌區新增「叫牌操作」面板，輪到你叫牌時會直接顯示 Pass、Double、Redouble 與 1–7 階叫價按鈕。
+- 左側操作區也使用同一套叫牌控制，避免多人房間中左側面板未渲染時無法叫牌。
+- 叫牌面板會顯示目前最高叫品、輪到哪一家，以及你所在座位，方便多人房間確認操作權。
+- 更新 Service Worker 快取版本為 `contract-bridge-v1-0-2-bidding-controls`。
+
+## v1.0.1：QR Code 邀請修正
+
+- 掃描 `?room=房號` 的邀請連結後，會自動連線 Firebase 並加入房間，不再只把房號填入輸入框。
+- 邀請連結同時支援 `room`、`r`、`code` 參數，並支援 query 與 hash 形式。
+- Service Worker 快取版本已更新，部署後請重新整理一次讓新版本生效。
+
+## v1.0.0：橋牌 Firebase 版
 
 - 改為 4 人合約橋牌。
 - 新增標準夢家亮牌模式。

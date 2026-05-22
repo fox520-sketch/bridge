@@ -1,4 +1,4 @@
-const CACHE_NAME = "contract-bridge-v1-0-1-invite-autojoin";
+const CACHE_NAME = "contract-bridge-v1-0-2-bidding-controls";
 const ASSETS = [
   "./",
   "./index.html",

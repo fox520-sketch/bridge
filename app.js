@@ -1,4 +1,4 @@
-const BUILD = "bridge-v1.0.1-invite-autojoin";
+const BUILD = "bridge-v1.0.2-bidding-controls";
 const ROOM_SCHEMA_VERSION = 51;
 const SEATS = [
   { id: 0, key: "N", name: "北", team: "NS" },
@@ -1112,6 +1112,14 @@ function renderHand(room) {
   $("handTitle").textContent = seat == null ? "觀戰中" : (seat === mySeat ? "你的手牌" : `你正在指揮 ${seatName(seat)} 的夢家牌`);
   $("handHint").textContent = handHintText(game, seat, canAct);
   $("handCount").textContent = seat == null ? "觀戰" : `${hand.length} 張`;
+
+  const inlinePanel = $("handActionPanel");
+  if (inlinePanel) {
+    inlinePanel.innerHTML = "";
+    inlinePanel.classList.toggle("hidden", game.phase !== "auction");
+    if (game.phase === "auction") renderAuctionControls(inlinePanel, game, mySeat, { compact: true, showTitle: true });
+  }
+
   const legalIds = canAct && ["openingLead", "play"].includes(game.phase) ? new Set(legalCardsForSeat(game, seat).map((c) => c.id)) : new Set();
   $("hand").innerHTML = hand.map((card) => {
     const playable = legalIds.has(card.id);
@@ -1145,27 +1153,7 @@ function renderActions(room) {
   const panel = $("actionPanel");
   panel.innerHTML = "";
   if (game.phase === "auction") {
-    if (mySeat == null || appState.spectator) return panel.append(actionNote("觀戰中，不能叫牌。"));
-    if (game.currentPlayer !== mySeat) return panel.append(actionNote(`等待 ${seatName(game.currentPlayer)} 叫牌。`));
-    const basic = document.createElement("div");
-    basic.className = "button-row";
-    for (const call of legalCalls(game, mySeat).filter((c) => c.type !== "bid")) {
-      const btn = button(callText(call), "ghost", () => submitAction({ type: "call", seat: mySeat, call }));
-      basic.appendChild(btn);
-    }
-    panel.appendChild(basic);
-    const bidGrid = document.createElement("div");
-    bidGrid.className = "action-grid bid-grid";
-    const legal = legalCalls(game, mySeat);
-    for (let level = 1; level <= 7; level++) {
-      for (const suit of SUIT_ORDER) {
-        const call = { type: "bid", level, suit };
-        const btn = button(`${level}${SUITS[suit].symbol}`, "ghost", () => submitAction({ type: "call", seat: mySeat, call }));
-        btn.disabled = !legal.some((c) => c.type === "bid" && c.level === level && c.suit === suit);
-        bidGrid.appendChild(btn);
-      }
-    }
-    panel.appendChild(bidGrid);
+    renderAuctionControls(panel, game, mySeat, { compact: false, showTitle: true });
     return;
   }
   if (["openingLead", "play"].includes(game.phase)) {
@@ -1183,6 +1171,68 @@ function renderActions(room) {
     panel.appendChild(row);
   }
 }
+
+function renderAuctionControls(container, game, mySeat, options = {}) {
+  if (!container) return;
+  const wrap = document.createElement("div");
+  wrap.className = `auction-controls${options.compact ? " compact-auction-controls" : ""}`;
+  if (options.showTitle) {
+    const title = document.createElement("div");
+    title.className = "auction-control-title";
+    title.innerHTML = `<b>叫牌操作</b><span>${auctionControlStatusText(game, mySeat)}</span>`;
+    wrap.appendChild(title);
+  }
+  if (mySeat == null || appState.spectator) {
+    wrap.append(actionNote("觀戰中，不能叫牌。"));
+    container.appendChild(wrap);
+    return;
+  }
+  if (game.currentPlayer !== mySeat) {
+    wrap.append(actionNote(`等待 ${seatName(game.currentPlayer)} 叫牌。你目前是 ${seatName(mySeat)}。`));
+    container.appendChild(wrap);
+    return;
+  }
+  let legal = [];
+  try {
+    legal = legalCalls(game, mySeat);
+  } catch (error) {
+    console.error("legalCalls failed", error);
+    wrap.append(actionNote("叫牌按鈕產生失敗，請重新整理頁面或請房主重新開局。"));
+    container.appendChild(wrap);
+    return;
+  }
+  const basic = document.createElement("div");
+  basic.className = "button-row call-row";
+  for (const call of legal.filter((c) => c.type !== "bid")) {
+    const btn = button(callText(call), call.type === "pass" ? "primary" : "ghost", () => submitAction({ type: "call", seat: mySeat, call }));
+    btn.title = `${seatName(mySeat)} 叫 ${callText(call)}`;
+    basic.appendChild(btn);
+  }
+  wrap.appendChild(basic);
+
+  const bidGrid = document.createElement("div");
+  bidGrid.className = "action-grid bid-grid";
+  for (let level = 1; level <= 7; level++) {
+    for (const suit of SUIT_ORDER) {
+      const call = { type: "bid", level, suit };
+      const btn = button(`${level}${SUITS[suit].symbol}`, "ghost bid-button", () => submitAction({ type: "call", seat: mySeat, call }));
+      const ok = legal.some((c) => c.type === "bid" && c.level === level && c.suit === suit);
+      btn.disabled = !ok;
+      btn.title = ok ? `${seatName(mySeat)} 叫 ${callText(call)}` : "此叫品目前不合法";
+      bidGrid.appendChild(btn);
+    }
+  }
+  wrap.appendChild(bidGrid);
+  container.appendChild(wrap);
+}
+
+function auctionControlStatusText(game, mySeat) {
+  const high = highestBid(game.auction || []);
+  const turn = game.currentPlayer != null ? `${seatName(game.currentPlayer)}叫牌` : "等待同步";
+  const mine = mySeat == null ? "觀戰" : `你是${seatName(mySeat)}`;
+  return high ? `${turn}｜目前最高 ${callText(high)} by ${SEATS[high.seat].key}｜${mine}` : `${turn}｜尚未叫牌｜${mine}`;
+}
+
 function button(text, cls, fn) { const b = document.createElement("button"); b.type = "button"; b.className = cls; b.textContent = text; b.addEventListener("click", fn); return b; }
 function actionNote(text) { const p = document.createElement("p"); p.className = "action-note"; p.textContent = text; return p; }
 function renderLog(game) {

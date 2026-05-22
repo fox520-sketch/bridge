@@ -185,6 +185,19 @@ select:focus, input:focus, textarea:focus { border-color: var(--accent); box-sha
 .actions { display: grid; gap: 10px; }
 .action-grid { display: grid; gap: 8px; }
 .bid-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+
+.auction-controls { display: grid; gap: 10px; border: 1px dashed var(--line); border-radius: 16px; padding: 10px; background: color-mix(in srgb, var(--accent), transparent 93%); }
+.auction-control-title { display: grid; gap: 3px; color: var(--ink); }
+.auction-control-title span { color: var(--muted); font-size: .88rem; line-height: 1.35; }
+.call-row .primary { min-width: 86px; }
+.bid-button { min-width: 0; padding-inline: 8px; }
+.inline-actions { margin: 0 0 14px; }
+.inline-actions .auction-controls { background: color-mix(in srgb, var(--accent), transparent 90%); }
+.inline-actions .bid-grid { grid-template-columns: repeat(10, minmax(44px, 1fr)); }
+.inline-actions .call-row button { min-width: 96px; }
+@media (max-width: 760px) {
+  .inline-actions .bid-grid { grid-template-columns: repeat(5, minmax(44px, 1fr)); }
+}
 .action-note { color: var(--muted); line-height: 1.5; }
 .table-wrap { display: grid; gap: 14px; }
 .table {

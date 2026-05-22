@@ -85,6 +85,12 @@ http://localhost:8080
 - `database.rules.json`：Realtime Database 規則
 - `manifest.webmanifest` / `service-worker.js`：PWA
 
+## v1.0.2：叫牌控制修正
+
+- 在手牌區新增「叫牌操作」面板，輪到你叫牌時會直接顯示 Pass、Double、Redouble 與 1–7 階叫價按鈕。
+- 左側操作區與手牌區同步顯示叫牌控制，方便桌機與手機操作。
+- Service Worker 快取版本已更新，部署後請重新整理或清除網站快取。
+
 ## v1.0.1：QR Code 邀請修正
 
 - 掃描 `?room=房號` 的邀請連結後，會自動連線 Firebase 並加入房間，不再只把房號填入輸入框。
