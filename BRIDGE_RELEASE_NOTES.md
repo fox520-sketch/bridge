@@ -1,5 +1,10 @@
 # Bridge Firebase Game Release Notes
 
+## v1.0.5-ai-human-delay
+- AI 叫牌與出牌改為等待 3 秒後才執行，讓電腦玩家節奏更像真人。
+- 真人玩家操作不延遲；只有座位類型為電腦時才套用等待。
+- 更新 Service Worker 快取版本為 `contract-bridge-v1-0-5-ai-human-delay`。
+
 ## v1.0.4-red-suits-on-table
 - 修正牌桌座位區的小牌顯示，紅心與方塊現在會以紅色呈現。
 - 保留黑桃與梅花為黑色，包含牌桌可見手牌與夢家小牌。

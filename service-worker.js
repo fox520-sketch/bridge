@@ -1,4 +1,4 @@
-const CACHE_NAME = "contract-bridge-v1-0-4-red-suits-on-table";
+const CACHE_NAME = "contract-bridge-v1-0-5-ai-human-delay";
 const ASSETS = [
   "./",
   "./index.html",

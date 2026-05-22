@@ -1,4 +1,4 @@
-const BUILD = "bridge-v1.0.4-red-suits-on-table";
+const BUILD = "bridge-v1.0.5-ai-human-delay";
 const ROOM_SCHEMA_VERSION = 51;
 const SEATS = [
   { id: 0, key: "N", name: "北", team: "NS" },
@@ -16,6 +16,7 @@ const SUITS = {
 const SUIT_ORDER = ["C", "D", "H", "S", "NT"];
 const RANKS = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"];
 const HCP = { A: 4, K: 3, Q: 2, J: 1 };
+const AI_ACTION_DELAY_MS = 3000;
 const STORAGE = {
   name: "bridge.playerName",
   theme: "bridge.theme",
@@ -921,6 +922,7 @@ function isVulnerable(vul, team) { return vul === "both" || vul?.toUpperCase() =
 
 function maybeScheduleBot() {
   clearTimeout(appState.botTimer);
+  appState.botTimer = null;
   const room = appState.room;
   const game = room?.game;
   if (!game || room?.meta?.status !== "game" || game.phase === "scoring") return;
@@ -929,12 +931,18 @@ function maybeScheduleBot() {
   const player = room.lobby.seats[controller];
   if (player?.type !== "bot") return;
   appState.botTimer = setTimeout(async () => {
+    const latestRoom = appState.room;
     const current = structuredCloneCompat(currentGame());
-    const action = chooseBotAction(current, controller, room.lobby);
+    if (!latestRoom?.game || !current || current.phase === "scoring") return;
+    const latestController = controllingSeatForCurrentAction(current);
+    if (latestController !== controller) return;
+    const latestPlayer = latestRoom.lobby?.seats?.[controller];
+    if (latestPlayer?.type !== "bot") return;
+    const action = chooseBotAction(current, controller, latestRoom.lobby);
     if (!action) return;
-    applyAction(current, { ...action, uid: player.uid, actorSeat: controller, createdAt: Date.now() }, room.lobby);
+    applyAction(current, { ...action, uid: latestPlayer.uid, actorSeat: controller, createdAt: Date.now() }, latestRoom.lobby);
     await updateRoom({ game: current, "meta/status": "game", "meta/updatedAt": Date.now() });
-  }, 500 + Math.random() * 650);
+  }, AI_ACTION_DELAY_MS);
 }
 function controllingSeatForCurrentAction(game) {
   if (game.phase === "play" && game.mode === "standard" && game.currentPlayer === game.dummy) return game.declarer;
