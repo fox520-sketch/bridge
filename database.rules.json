@@ -1,0 +1,41 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "rooms": {
+      "$room": {
+        ".read": "auth != null",
+        ".write": "auth != null",
+        ".validate": "newData.val() == null || newData.hasChildren(['meta', 'lobby'])",
+        "meta": {
+          ".validate": "newData.hasChildren(['code', 'hostUid', 'status', 'createdAt', 'updatedAt'])",
+          "code": { ".validate": "newData.isString() && newData.val().length <= 8" },
+          "hostUid": { ".validate": "newData.isString()" },
+          "status": { ".validate": "newData.val() == 'lobby' || newData.val() == 'game' || newData.val() == 'closed'" },
+          "createdAt": { ".validate": "newData.isNumber()" },
+          "updatedAt": { ".validate": "newData.isNumber()" },
+          "expiresAt": { ".validate": "!newData.exists() || newData.isNumber()" },
+          "schemaVersion": { ".validate": "!newData.exists() || newData.isNumber()" },
+          "appBuild": { ".validate": "!newData.exists() || newData.isString()" },
+          "$other": { ".validate": true }
+        },
+        "lobby": {
+          ".validate": "newData.hasChildren(['dealer', 'settings', 'seats'])",
+          "seats": {
+            "$seat": {
+              ".validate": "newData.val() == null || (newData.hasChildren(['seat', 'uid', 'name', 'type']) && newData.child('seat').isNumber() && newData.child('uid').isString() && newData.child('name').isString() && (newData.child('type').val() == 'human' || newData.child('type').val() == 'bot'))"
+            }
+          },
+          "$other": { ".validate": true }
+        },
+        "actions": {
+          "$action": {
+            ".validate": "newData.hasChildren(['uid', 'seat', 'type', 'createdAt']) && newData.child('uid').isString() && newData.child('seat').isNumber() && newData.child('type').isString()"
+          }
+        },
+        "game": { ".validate": true },
+        "$other": { ".validate": true }
+      }
+    }
+  }
+}

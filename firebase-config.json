@@ -1,0 +1,9 @@
+{
+  apiKey: "AIzaSyDbOGwdYNY4mFG8Sgy8w_QdJpziWVoNx10",
+  authDomain: "napoleon-secretary-3.firebaseapp.com",
+  databaseURL: "https://napoleon-secretary-3-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "napoleon-secretary-3",
+  storageBucket: "napoleon-secretary-3.firebasestorage.app",
+  messagingSenderId: "189925612153",
+  appId: "1:189925612153:web:a6db7ea4dc1e8945c152a8"
+}
