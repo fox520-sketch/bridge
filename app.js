@@ -1,4 +1,4 @@
-const BUILD = "bridge-v1.0.2-bidding-controls";
+const BUILD = "bridge-v1.0.3-firebase-array-normalize";
 const ROOM_SCHEMA_VERSION = 51;
 const SEATS = [
   { id: 0, key: "N", name: "北", team: "NS" },
@@ -406,7 +406,31 @@ function normalizeRoom(room) {
   room.lobby.seats ||= {};
   for (let i = 0; i < 4; i++) if (room.lobby.seats[i] === undefined) room.lobby.seats[i] = null;
   room.lobby.settings ||= defaultSettingsFromUI("lobby");
+  if (room.game) normalizeGame(room.game);
   return room;
+}
+function listFromFirebase(value) {
+  if (Array.isArray(value)) return value.filter((item) => item !== undefined && item !== null);
+  if (!value || typeof value !== "object") return [];
+  return Object.keys(value)
+    .sort((a, b) => Number(a) - Number(b))
+    .map((key) => value[key])
+    .filter((item) => item !== undefined && item !== null);
+}
+function normalizeGame(game) {
+  game.auction = listFromFirebase(game.auction);
+  game.currentTrick = listFromFirebase(game.currentTrick);
+  game.trickHistory = listFromFirebase(game.trickHistory);
+  game.log = listFromFirebase(game.log);
+  const rawHands = game.hands || {};
+  game.hands = [0, 1, 2, 3].map((seat) => listFromFirebase(rawHands[seat] ?? rawHands[String(seat)]));
+  game.tricksWon ||= { NS: 0, EW: 0 };
+  game.score ||= { NS: 0, EW: 0 };
+  game.auction ||= [];
+  game.currentTrick ||= [];
+  game.trickHistory ||= [];
+  game.log ||= [];
+  return game;
 }
 function findSeatByUid(room, uid = appState.uid) {
   const seats = room?.lobby?.seats || {};
@@ -663,6 +687,7 @@ function applyAction(game, action, lobby) {
   return { ok: false, message: "未知操作" };
 }
 function applyCall(game, action) {
+  normalizeGame(game);
   const seat = Number(action.seat);
   if (game.phase !== "auction") return { ok: false, message: "現在不是叫牌階段" };
   if (seat !== game.currentPlayer) return { ok: false, message: "還沒輪到你叫牌" };
@@ -700,12 +725,13 @@ function normalizeCall(call) {
   return { type: "pass" };
 }
 function highestBid(auction) {
-  for (let i = auction.length - 1; i >= 0; i--) if (auction[i].type === "bid") return auction[i];
+  const calls = listFromFirebase(auction);
+  for (let i = calls.length - 1; i >= 0; i--) if (calls[i]?.type === "bid") return calls[i];
   return null;
 }
 function currentDoubled(auction) {
   let state = 0;
-  for (const call of auction) {
+  for (const call of listFromFirebase(auction)) {
     if (call.type === "bid") state = 0;
     if (call.type === "double") state = 1;
     if (call.type === "redouble") state = 2;
@@ -727,6 +753,7 @@ function isLegalCall(game, call, seat) {
 }
 function bidRank(call) { return (Number(call.level) - 1) * 5 + SUITS[call.suit].order; }
 function legalCalls(game, seat) {
+  if (game) game.auction = listFromFirebase(game.auction);
   const calls = [{ type: "pass" }];
   if (isLegalCall(game, { type: "double" }, seat)) calls.push({ type: "double" });
   if (isLegalCall(game, { type: "redouble" }, seat)) calls.push({ type: "redouble" });
@@ -739,7 +766,8 @@ function legalCalls(game, seat) {
   return calls;
 }
 function auctionEndState(game) {
-  const auction = game.auction;
+  const auction = listFromFirebase(game.auction);
+  game.auction = auction;
   if (auction.length >= 4 && auction.slice(-4).every((c) => c.type === "pass") && !highestBid(auction)) return { ended: true, contract: null };
   const high = highestBid(auction);
   if (!high) return { ended: false };
@@ -751,11 +779,12 @@ function auctionEndState(game) {
 }
 function determineDeclarer(auction, contractSeat, suit) {
   const side = teamOf(contractSeat);
-  const first = auction.find((call) => call.type === "bid" && call.suit === suit && teamOf(call.seat) === side);
+  const first = listFromFirebase(auction).find((call) => call.type === "bid" && call.suit === suit && teamOf(call.seat) === side);
   return first?.seat ?? contractSeat;
 }
 
 function applyPlay(game, action, settings) {
+  normalizeGame(game);
   const seat = Number(action.seat);
   if (!["openingLead", "play"].includes(game.phase)) return { ok: false, message: "現在不能出牌" };
   if (seat !== game.currentPlayer) return { ok: false, message: "還沒輪到這一手出牌" };
@@ -803,6 +832,7 @@ function legalCardsForSeat(game, seat) {
   return (game.hands[seat] || []).filter((card) => isLegalCardPlay(game, seat, card));
 }
 function trickWinner(plays, trumpSuit) {
+  plays = listFromFirebase(plays);
   const ledSuit = plays[0].card.suit;
   let best = plays[0];
   for (const play of plays.slice(1)) {
@@ -1018,7 +1048,7 @@ function renderLobby(room) {
   $("lobbyNotice").textContent = isHost() ? `目前 ${filled}/4 位；可補電腦後開始。` : "等待房主開始。";
 }
 function renderGame(room) {
-  const game = room.game;
+  const game = normalizeGame(room.game);
   renderPhase(game);
   renderContract(game);
   renderScore(game);

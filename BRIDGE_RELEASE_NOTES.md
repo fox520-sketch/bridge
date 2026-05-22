@@ -1,5 +1,11 @@
 # Bridge Release Notes
 
+## v1.0.3 - Firebase 陣列同步修正
+
+- 修正 Firebase Realtime Database 在空陣列（例如尚未有人叫牌的 `auction`）同步後可能變成缺漏值，導致叫牌按鈕產生失敗。
+- 新增房間資料正規化：叫牌紀錄、目前墩、墩史、手牌與記錄都會在渲染與處理動作前轉回陣列。
+- 更新 Service Worker 快取版本為 `contract-bridge-v1-0-3-firebase-array-normalize`。
+
 ## v1.0.2：叫牌控制修正
 
 - 在手牌區新增「叫牌操作」面板，輪到你叫牌時會直接顯示 Pass、Double、Redouble 與 1–7 階叫價按鈕。

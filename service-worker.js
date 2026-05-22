@@ -1,4 +1,4 @@
-const CACHE_NAME = "contract-bridge-v1-0-2-bidding-controls";
+const CACHE_NAME = "contract-bridge-v1-0-3-firebase-array-normalize";
 const ASSETS = [
   "./",
   "./index.html",
