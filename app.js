@@ -1,5 +1,5 @@
-const BUILD = "bridge-v1.0.9-mobile-result-scroll";
-const ROOM_SCHEMA_VERSION = 53;
+const BUILD = "bridge-v1.0.10-current-winning-card";
+const ROOM_SCHEMA_VERSION = 54;
 const SEATS = [
   { id: 0, key: "N", name: "北", team: "NS" },
   { id: 1, key: "E", name: "東", team: "EW" },
@@ -994,14 +994,18 @@ function isLegalCardPlay(game, seat, card) {
 function legalCardsForSeat(game, seat) {
   return (game.hands[seat] || []).filter((card) => isLegalCardPlay(game, seat, card));
 }
-function trickWinner(plays, trumpSuit) {
-  plays = listFromFirebase(plays);
+function currentWinningPlay(plays, trumpSuit) {
+  plays = listFromFirebase(plays).filter((play) => play && play.card);
+  if (!plays.length) return null;
   const ledSuit = plays[0].card.suit;
   let best = plays[0];
   for (const play of plays.slice(1)) {
     if (beats(play.card, best.card, ledSuit, trumpSuit)) best = play;
   }
-  return best.seat;
+  return best;
+}
+function trickWinner(plays, trumpSuit) {
+  return currentWinningPlay(plays, trumpSuit)?.seat;
 }
 function beats(card, best, ledSuit, trumpSuit) {
   if (trumpSuit && trumpSuit !== "NT") {
@@ -1436,11 +1440,14 @@ function renderTable(room) {
       <div class="seat-meta">${escapeHtml(player?.name || "空位")}｜${teamOf(seat)}｜手牌 ${game.hands[seat]?.length || 0}</div>
       <div class="seat-tags">${tags.join("")}</div>${mini}
     `;
+    const liveWinningPlay = currentWinningPlay(game.currentTrick || [], game.contract?.suit);
     const play = (game.currentTrick || []).find((p) => p.seat === seat);
     const playEl = $(`play${seat}`);
-    playEl.innerHTML = play ? cardHtml(play.card, { small: false }) : "";
+    const isWinningCard = Boolean(play && liveWinningPlay && play.seat === liveWinningPlay.seat && play.card?.id === liveWinningPlay.card?.id);
+    playEl.innerHTML = play ? cardHtml(play.card, { small: false, winning: isWinningCard }) : "";
   }
-  $("trickArea").innerHTML = game.phase === "trickPause" && game.pendingTrick ? `<span class="pill">本墩完成｜${seatName(game.pendingTrick.winner)} 贏，3 秒後清桌</span>` : (game.currentTrick?.length ? `<span class="pill">本墩 ${game.currentTrick.length}/4</span>` : `<span class="pill">等待出牌</span>`);
+  const liveWinner = currentWinningPlay(game.currentTrick || [], game.contract?.suit);
+  $("trickArea").innerHTML = game.phase === "trickPause" && game.pendingTrick ? `<span class="pill winning-pill">本墩完成｜${seatName(game.pendingTrick.winner)} 贏，3 秒後清桌</span>` : (game.currentTrick?.length ? `<span class="pill winning-pill">本墩 ${game.currentTrick.length}/4｜目前最大：${seatName(liveWinner?.seat)} ${liveWinner?.card ? cardTextHtml(liveWinner.card) : ""}</span>` : `<span class="pill">等待出牌</span>`);
   $("kittyArea").textContent = game.phase === "auction" ? auctionSummary(game.auction) : "";
 }
 function isSeatHandVisible(game, seat, mySeat) {
@@ -1654,9 +1661,10 @@ function maybeShowResult(game) {
   playSfx(game.result.made ? "success" : "fail");
 }
 function cardHtml(card, opts = {}) {
-  const cls = ["card-face", cardColor(card), opts.small ? "small" : "", opts.playable ? "playable" : "", opts.disabled ? "disabled" : ""].filter(Boolean).join(" ");
+  const cls = ["card-face", cardColor(card), opts.small ? "small" : "", opts.playable ? "playable" : "", opts.disabled ? "disabled" : "", opts.winning ? "winning-card" : ""].filter(Boolean).join(" ");
   const data = opts.cardId ? ` data-card-id="${escapeHtml(opts.cardId)}" data-seat="${Number(opts.seat)}"` : "";
-  return `<div class="${cls}"${data} title="${escapeHtml(card.label)}"><span class="rank">${escapeHtml(card.rank)}</span><span class="suit">${SUITS[card.suit].symbol}</span></div>`;
+  const title = opts.winning ? `${card.label}｜目前最大` : card.label;
+  return `<div class="${cls}"${data} title="${escapeHtml(title)}"><span class="rank">${escapeHtml(card.rank)}</span><span class="suit">${SUITS[card.suit].symbol}</span></div>`;
 }
 function miniCardHtml(card) { return `<span class="mini-card ${cardColor(card)}">${escapeHtml(card.rank)}${SUITS[card.suit].symbol}</span>`; }
 function cardColor(card) { return SUITS[card.suit]?.color === "red" ? "red" : "black"; }

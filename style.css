@@ -256,6 +256,31 @@ select:focus, input:focus, textarea:focus { border-color: var(--accent); box-sha
 .card-face.playable { cursor: pointer; outline: 3px solid color-mix(in srgb, var(--accent), transparent 58%); transform: translateY(-4px); }
 .card-face.disabled { opacity: .45; filter: grayscale(.2); }
 .card-face.selected { outline: 3px solid #facc15; transform: translateY(-8px); }
+
+.card-face.winning-card {
+  outline: 4px solid #facc15;
+  box-shadow: 0 0 0 5px rgba(250,204,21,.28), 0 14px 30px rgba(0,0,0,.28);
+  transform: translateY(-8px) scale(1.08);
+  z-index: 8;
+}
+.card-face.winning-card::after {
+  content: "目前最大";
+  position: absolute;
+  left: 50%;
+  bottom: -24px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  border-radius: 999px;
+  background: #facc15;
+  color: #422006;
+  border: 1px solid rgba(0,0,0,.12);
+  padding: 3px 8px;
+  font-size: .7rem;
+  font-weight: 1000;
+  box-shadow: 0 8px 18px rgba(0,0,0,.22);
+}
+.winning-pill { color: #0f172a; }
+.winning-pill .red { color: #b91c1c; }
 .card-face.small { width: 42px; height: 60px; border-radius: 9px; padding: 4px; }
 .card-face.small .rank { font-size: .9rem; }
 .card-face.small .suit { font-size: 1rem; }
