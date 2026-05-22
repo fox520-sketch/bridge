@@ -323,3 +323,56 @@ body:not(.log-visible) .log-panel .log { display: none; }
   .hand { gap: 6px; }
   .result-stats { grid-template-columns: 1fr; }
 }
+
+/* v1.0.7 records, legal-card clarity, and presence */
+.record-panel { border: 1px solid var(--line); border-radius: 16px; padding: 12px; margin-bottom: 12px; background: color-mix(in srgb, var(--panel-strong), transparent 8%); }
+.record-panel h3 { margin: 0 0 8px; }
+.record-scroll { overflow-x: auto; }
+.record-table { width: 100%; border-collapse: collapse; font-size: .86rem; min-width: 280px; }
+.record-table th, .record-table td { border: 1px solid var(--line); padding: 6px 7px; text-align: center; vertical-align: middle; white-space: nowrap; }
+.record-table th { background: color-mix(in srgb, var(--accent), transparent 88%); color: var(--ink); font-weight: 900; }
+.record-table th small { display: block; color: var(--muted); font-weight: 700; }
+.record-table .pending-row td { background: color-mix(in srgb, var(--warn), transparent 90%); }
+.record-table .live-row td { background: color-mix(in srgb, var(--accent), transparent 90%); }
+.call-text, .card-text { font-weight: 1000; }
+.call-text.red, .card-text.red { color: #b91c1c; }
+.call-text.black, .card-text.black { color: #111827; }
+.card-face.playable { box-shadow: 0 10px 22px color-mix(in srgb, var(--accent), transparent 72%); }
+.card-face.disabled { opacity: .28; filter: grayscale(.72); cursor: not-allowed; transform: scale(.96); }
+.presence-card-title { display: grid; gap: 3px; margin-top: 8px; }
+.presence-card-title span { color: var(--muted); font-size: .85rem; }
+.presence-list { display: grid; gap: 6px; margin-top: 8px; }
+.presence-row { display: grid; grid-template-columns: minmax(72px, 1fr) minmax(70px, 1fr) auto; gap: 8px; align-items: center; padding: 7px 8px; border-radius: 12px; background: color-mix(in srgb, var(--panel-strong), transparent 8%); border: 1px solid var(--line); }
+.presence-row b { color: var(--ink); }
+.presence-row span { color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.presence-row em { font-style: normal; font-weight: 900; }
+.presence-row.online em, .presence-tag.online, .presence-pill.online { color: var(--ok); }
+.presence-row.offline em, .presence-tag.offline, .presence-pill.offline { color: var(--danger); }
+.presence-row.bot em, .presence-pill.bot { color: var(--warn); }
+.presence-row.empty { opacity: .68; }
+.lobby-seat.online { border-color: color-mix(in srgb, var(--ok), transparent 70%); }
+.lobby-seat.offline { border-color: color-mix(in srgb, var(--danger), transparent 64%); }
+.lobby-seat.bot { border-color: color-mix(in srgb, var(--warn), transparent 72%); }
+.presence-pill { background: color-mix(in srgb, var(--panel-strong), transparent 8%); }
+.tag.presence-tag.offline { background: #fee2e2; }
+.tag.presence-tag.online { background: #dcfce7; }
+.game-room-status { margin-bottom: 14px; }
+@media (max-width: 760px) {
+  .presence-row { grid-template-columns: 1fr; gap: 2px; }
+  .record-table { font-size: .8rem; }
+}
+
+
+/* v1.0.8 hand analysis, AI notes, and sharable hand records */
+.hand-analysis { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+.hand-chip { display: inline-grid; gap: 1px; border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; background: color-mix(in srgb, var(--panel-strong), transparent 6%); }
+.hand-chip b { line-height: 1; }
+.hand-chip small { color: var(--muted); font-size: .72rem; font-weight: 800; }
+.game-tools-panel .button-row { margin-top: 8px; }
+.result-stat.wide { grid-column: 1 / -1; }
+.result-stat.wide b { font-size: .98rem; line-height: 1.45; }
+.replay-actions { margin-bottom: 12px; }
+@media (max-width: 760px) {
+  .hand-analysis { gap: 6px; }
+  .hand-chip { border-radius: 14px; padding: 6px 8px; }
+}

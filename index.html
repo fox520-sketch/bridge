@@ -360,12 +360,26 @@
             </div>
             <div id="handCount" class="pill"></div>
           </div>
+          <div id="handAnalysis" class="hand-analysis" aria-live="polite"></div>
           <div id="handActionPanel" class="inline-actions hidden" aria-live="polite"></div>
           <div id="hand" class="hand"></div>
         </div>
       </section>
 
       <aside class="right-panel panel log-panel">
+        <section class="record-panel game-tools-panel">
+          <h3>牌局工具</h3>
+          <p class="hint compact">可複製完整牌譜，方便分享、回報問題或賽後檢討。</p>
+          <div class="button-row"><button id="btnCopyHandRecordGame" class="ghost" type="button">複製完整牌譜</button></div>
+        </section>
+        <section class="record-panel">
+          <h3>叫牌紀錄表</h3>
+          <div id="auctionRecord" class="record-scroll" aria-live="polite"></div>
+        </section>
+        <section class="record-panel">
+          <h3>每墩出牌紀錄</h3>
+          <div id="trickRecord" class="record-scroll" aria-live="polite"></div>
+        </section>
         <div class="log-header">
           <h3>牌局紀錄</h3>
           <button id="btnToggleLog" class="ghost log-toggle" type="button">顯示紀錄</button>
@@ -516,6 +530,7 @@
         <div id="resultStats" class="result-stats"></div>
         <div class="result-buttons">
           <button id="resultReplay" class="ghost" type="button">牌局回放</button>
+          <button id="resultCopyHandRecord" class="ghost" type="button">複製牌譜</button>
           <button id="resultNewDeal" class="ghost" type="button">再玩一副</button>
           <button id="resultClose" class="primary" type="button">繼續</button>
         </div>
@@ -527,7 +542,7 @@
         <button id="closeReplay" class="close" type="button">×</button>
         <h2>牌局回放</h2>
         <p id="replaySummary" class="hint"></p>
-        <div class="button-row replay-actions"><button id="btnShareReplay" class="ghost" type="button">分享回放摘要</button></div>
+        <div class="button-row replay-actions"><button id="btnShareReplay" class="ghost" type="button">分享回放摘要</button><button id="btnCopyHandRecordReplay" class="ghost" type="button">複製完整牌譜</button></div>
         <div id="replayList" class="replay-list"></div>
       </div>
     </dialog>

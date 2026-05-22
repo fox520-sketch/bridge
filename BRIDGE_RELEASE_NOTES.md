@@ -1,3 +1,10 @@
+# v1.0.8-ai-notes-hand-record
+
+- 新增手牌牌力摘要。
+- 啟用 AI 思路紀錄。
+- 新增完整牌譜複製工具。
+- 結果畫面顯示計分明細。
+
 ## v1.0.7-records-presence-reconnect
 
 - 新增叫牌紀錄表，固定以 W / N / E / S 欄位顯示完整叫牌流程。
