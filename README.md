@@ -85,6 +85,12 @@ http://localhost:8080
 - `database.rules.json`：Realtime Database 規則
 - `manifest.webmanifest` / `service-worker.js`：PWA
 
+## v1.0.6：本墩清桌延遲
+
+- 出完一墩四張牌後，牌桌停留 3 秒才清桌。
+- 停留期間暫停下一個出牌動作，讓玩家看清楚最後一位出了哪張牌。
+- 保留 AI 叫牌與出牌 3 秒延遲。
+
 ## v1.0.2：叫牌控制修正
 
 - 在手牌區新增「叫牌操作」面板，輪到你叫牌時會直接顯示 Pass、Double、Redouble 與 1–7 階叫價按鈕。

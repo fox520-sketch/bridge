@@ -1,3 +1,10 @@
+## v1.0.6-trick-clear-delay
+
+- 一墩四張牌出完後，牌桌會保留最後一墩 3 秒再自動收牌，方便看清最後一位玩家出了哪張牌。
+- 暫停收牌期間會顯示「本墩完成」狀態，避免真人或 AI 立即進入下一墩。
+- 保留 v1.0.5 的 AI 叫牌 / 出牌 3 秒真人模擬延遲。
+- 更新 Service Worker 快取版本為 `contract-bridge-v1-0-6-trick-clear-delay`。
+
 # Bridge Firebase Game Release Notes
 
 ## v1.0.5-ai-human-delay
