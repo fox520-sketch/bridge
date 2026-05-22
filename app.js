@@ -1,4 +1,4 @@
-const BUILD = "bridge-v1.0.3-firebase-array-normalize";
+const BUILD = "bridge-v1.0.4-red-suits-on-table";
 const ROOM_SCHEMA_VERSION = 51;
 const SEATS = [
   { id: 0, key: "N", name: "北", team: "NS" },

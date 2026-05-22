@@ -1,3 +1,10 @@
+# Bridge Firebase Game Release Notes
+
+## v1.0.4-red-suits-on-table
+- 修正牌桌座位區的小牌顯示，紅心與方塊現在會以紅色呈現。
+- 保留黑桃與梅花為黑色，包含牌桌可見手牌與夢家小牌。
+- 更新 Service Worker 快取版本為 `contract-bridge-v1-0-4-red-suits-on-table`。
+
 # Bridge Release Notes
 
 ## v1.0.3 - Firebase 陣列同步修正
