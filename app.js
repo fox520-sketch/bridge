@@ -1,4 +1,4 @@
-const BUILD = "bridge-v1.0.0-standard-closed-firebase";
+const BUILD = "bridge-v1.0.1-invite-autojoin";
 const ROOM_SCHEMA_VERSION = 51;
 const SEATS = [
   { id: 0, key: "N", name: "北", team: "NS" },
@@ -53,6 +53,8 @@ const appState = {
   offline: false,
   spectator: false,
   botTimer: null,
+  pendingInviteRoom: null,
+  inviteAutoJoinAttempted: false,
   audioContext: null,
   lastResultKey: null,
   processingActions: false,
@@ -74,11 +76,11 @@ function init() {
   applyTouchComfort();
   applyLogVisibility(getBool(STORAGE.logVisible, false));
 
-  const params = new URLSearchParams(location.search);
-  const roomFromUrl = params.get("room");
+  const roomFromUrl = getInviteRoomFromLocation();
   if (roomFromUrl) {
-    $("roomCode").value = roomFromUrl.toUpperCase().slice(0, 8);
-    $("connectStatus").textContent = `偵測到邀請房號 ${$("roomCode").value}，請先連線 Firebase 再加入。`;
+    appState.pendingInviteRoom = roomFromUrl;
+    $("roomCode").value = roomFromUrl;
+    $("connectStatus").textContent = `偵測到邀請房號 ${roomFromUrl}，正在自動連線並加入…`;
   } else {
     const last = localStorage.getItem(STORAGE.lastRoom);
     const at = Number(localStorage.getItem(STORAGE.lastRoomAt) || 0);
@@ -86,6 +88,7 @@ function init() {
   }
 
   bindEvents();
+  if (appState.pendingInviteRoom) setTimeout(autoJoinInviteRoom, 250);
   renderLocalStatsSummary();
   renderReleaseChecklist();
   $("versionFooter").textContent = `合約橋牌 ${BUILD}｜標準夢家／閉手變體｜Firebase 多人房間`;
@@ -258,6 +261,38 @@ async function connectFirebase() {
   }
 }
 function setStatus(text) { $("connectStatus").textContent = text; }
+
+function normalizeRoomCode(raw) {
+  return String(raw || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+}
+function getInviteRoomFromLocation() {
+  const candidates = [];
+  try {
+    const params = new URLSearchParams(location.search);
+    candidates.push(params.get("room"), params.get("r"), params.get("code"));
+  } catch (error) {
+    console.warn("無法讀取邀請網址參數", error);
+  }
+  try {
+    const rawHash = String(location.hash || "").replace(/^#/, "");
+    const hashQuery = rawHash.includes("?") ? rawHash.slice(rawHash.indexOf("?") + 1) : rawHash;
+    if (hashQuery && hashQuery.includes("=")) {
+      const params = new URLSearchParams(hashQuery);
+      candidates.push(params.get("room"), params.get("r"), params.get("code"));
+    }
+  } catch (error) {
+    console.warn("無法讀取邀請網址 hash 參數", error);
+  }
+  return normalizeRoomCode(candidates.find((value) => normalizeRoomCode(value)) || "");
+}
+async function autoJoinInviteRoom() {
+  const code = normalizeRoomCode(appState.pendingInviteRoom);
+  if (!code || appState.inviteAutoJoinAttempted || appState.room) return;
+  appState.inviteAutoJoinAttempted = true;
+  $("roomCode").value = code;
+  setStatus(`正在透過邀請連結加入房間 ${code}…`);
+  await joinRoomByCode(code, false, true);
+}
 function roomPath(code = appState.roomCode) { return `rooms/${code}`; }
 function actionsPath(code = appState.roomCode) { return `rooms/${code}/actions`; }
 
@@ -304,14 +339,28 @@ function makeSeat(seat, uid, name, type = "human") {
   return { seat, uid, name: String(name || randomGuestName()).slice(0, 12), type, joinedAt: Date.now(), lastSeen: Date.now() };
 }
 async function joinRoomFromInput(spectator = false) {
-  if (!appState.connected && !(await connectFirebase())) return;
+  const code = normalizeRoomCode($("roomCode").value);
+  await joinRoomByCode(code, spectator, false);
+}
+async function joinRoomByCode(code, spectator = false, fromInvite = false) {
+  code = normalizeRoomCode(code);
+  if (!code) return toast(fromInvite ? "邀請連結沒有房號" : "請輸入房號");
+  $("roomCode").value = code;
+  if (!appState.connected && !(await connectFirebase())) {
+    if (fromInvite) setStatus(`偵測到邀請房號 ${code}，但 Firebase 連線失敗，請稍後重試。`);
+    return;
+  }
   savePlayerName();
-  const code = ($("roomCode").value || "").trim().toUpperCase();
-  if (!code) return toast("請輸入房號");
   const snap = await appState.firebase.get(appState.firebase.ref(appState.firebase.db, roomPath(code)));
-  if (!snap.exists()) return toast("找不到房間");
+  if (!snap.exists()) {
+    setStatus(fromInvite ? `找不到邀請房間 ${code}，請確認房主還在房間內。` : "找不到房間");
+    return toast("找不到房間");
+  }
   const room = snap.val();
-  if (room?.meta?.status === "closed") return toast("房間已關閉");
+  if (room?.meta?.status === "closed") {
+    setStatus(`房間 ${code} 已關閉`);
+    return toast("房間已關閉");
+  }
   appState.roomCode = code;
   appState.offline = false;
   appState.spectator = spectator;
@@ -1215,7 +1264,13 @@ async function leaveRoom(silent = false) {
   $("resultOverlay").classList.add("hidden");
   if (!silent) toast("已離開房間");
 }
-function buildInviteLink(code = appState.roomCode) { return `${location.origin}${location.pathname}?room=${encodeURIComponent(code || "")}`; }
+function buildInviteLink(code = appState.roomCode) {
+  const url = new URL(location.href);
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("room", normalizeRoomCode(code));
+  return url.toString();
+}
 function buildQrCodeUrl(url) { return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=12&data=${encodeURIComponent(url)}`; }
 async function copyInviteLink() { await copyText(buildInviteLink()); toast("已複製邀請連結"); }
 async function copyText(text) {

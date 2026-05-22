@@ -84,3 +84,9 @@ http://localhost:8080
 - `app.js`：橋牌規則、AI、Firebase 多人同步與 UI
 - `database.rules.json`：Realtime Database 規則
 - `manifest.webmanifest` / `service-worker.js`：PWA
+
+## v1.0.1：QR Code 邀請修正
+
+- 掃描 `?room=房號` 的邀請連結後，會自動連線 Firebase 並加入房間，不再只把房號填入輸入框。
+- 邀請連結同時支援 `room`、`r`、`code` 參數，並支援 query 與 hash 形式。
+- Service Worker 快取版本已更新，部署後請重新整理一次讓新版本生效。

@@ -1,4 +1,4 @@
-const CACHE_NAME = "contract-bridge-v1-standard-closed-firebase";
+const CACHE_NAME = "contract-bridge-v1-0-1-invite-autojoin";
 const ASSETS = [
   "./",
   "./index.html",

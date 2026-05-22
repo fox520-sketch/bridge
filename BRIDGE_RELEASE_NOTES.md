@@ -1,3 +1,10 @@
+
+## bridge-v1.0.1-invite-autojoin
+
+- 修正 QR Code 掃描後沒有自動帶入／加入房間的體驗。
+- 開啟 `?room=XXXXX` 會自動連線 Firebase 並嘗試加入；座位已滿時沿用原本邏輯改為觀戰。
+- 邀請連結產生邏輯改用目前頁面的完整 URL 基底，避免重複或遺失查詢參數。
+
 # Bridge Release Notes
 
 - 改為 4 人合約橋牌。
