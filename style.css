@@ -659,3 +659,8 @@ button .suit-symbol.black,
   .replay-step-controls select { grid-column: 1 / -1; order: -1; }
   .replay-step-grid, .replay-hand-grid { grid-template-columns: 1fr; }
 }
+
+/* v1.0.19: Chicago score history, action audit, undo tools */
+.match-history { display: grid; gap: 4px; padding: 8px 0 0; font-size: .82rem; color: var(--muted); }
+.match-history span { display: block; border: 1px solid var(--line); border-radius: 10px; padding: 5px 8px; background: rgba(255,255,255,.45); }
+.security-list li span { line-height: 1.35; }

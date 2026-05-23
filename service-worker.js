@@ -1,4 +1,4 @@
-const CACHE_NAME = "contract-bridge-v1-0-18-secure-ai-replay-drawer";
+const CACHE_NAME = "contract-bridge-v1-0-19-secure-actions-chicago-undo-report";
 const ASSETS = [
   "./",
   "./index.html",

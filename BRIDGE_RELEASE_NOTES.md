@@ -1,5 +1,17 @@
 # 合約橋牌版本紀錄
 
+## v1.0.19-secure-actions-chicago-undo-report
+
+- 多人牌局正式拆分公開狀態與私人手牌：公開 `rooms/{code}/game` 不再保存四家 `hands` / `initialHands`，改由 `roomPrivateHands/{code}/{seat}` 保存目前手牌與原始手牌。
+- `updateRoom()` 在多人寫入 `game` 時會自動拆成 public game + private hand payload；玩家畫面只 hydrate 自己、公開夢家與結束後公開的手牌。
+- 新增動作提交 / 合法性驗證第一版：玩家送出 intent 到 `rooms/{code}/actions`，房主端檢查 UID、actorSeat、目前輪到者、叫品合法性與跟牌規則後才更新牌局。
+- 新增 `actionAudit`，被拒絕的不合法動作會留下原因，方便除錯。
+- 新增 Chicago 四副制與總分表，房間設定可選單副練習或 Chicago 四副制。
+- 房主新增「撤銷上一動作」與「重打本副」。撤銷快照寫到 `roomUndo/{code}`，避免把完整手牌放在公開房間節點。
+- 新增詳細錯誤回報，包含目前公開狀態、健康檢查、最近 log、action audit、match 分數與版本資訊。
+- 更新 `database.rules.json` 與 `database.rules.secure.example.json`，加入 `roomPrivateHands` 與 `roomUndo` 路徑。
+- 更新 Service Worker 快取版本為 `contract-bridge-v1-0-19-secure-actions-chicago-undo-report`。
+
 ## v1.0.18-secure-ai-replay-drawer
 
 - 新增防作弊資料拆分設計文件 `ANTI_CHEAT_FIREBASE_DESIGN.md`，並更新 `database.rules.secure.example.json`。

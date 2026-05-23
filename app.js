@@ -1,5 +1,5 @@
-const BUILD = "bridge-v1.0.18-secure-ai-replay-drawer";
-const ROOM_SCHEMA_VERSION = 60;
+const BUILD = "bridge-v1.0.19-secure-actions-chicago-undo-report";
+const ROOM_SCHEMA_VERSION = 61;
 const SEATS = [
   { id: 0, key: "N", name: "北", team: "NS" },
   { id: 1, key: "E", name: "東", team: "EW" },
@@ -76,6 +76,10 @@ const appState = {
   uiTicker: null,
   pendingPlay: null,
   replay: { game: null, steps: [], index: 0 },
+  privateHands: {},
+  privateHandsUnsub: null,
+  privateHandsSubKey: null,
+  undoSnapshot: null,
   recordsDrawerOpen: false,
   mobileRecordTab: "tools"
 };
@@ -163,8 +167,13 @@ function bindEvents() {
   $("lobbyVulnerability").addEventListener("change", hostUpdateSettingsFromLobby);
   $("difficulty").addEventListener("input", () => { $("difficultyLabel").textContent = $("difficulty").value; hostUpdateSettingsFromLobby(); });
   $("lobbyPacing")?.addEventListener("change", hostUpdateSettingsFromLobby);
+  $("lobbyScoringMode")?.addEventListener("change", hostUpdateSettingsFromLobby);
   $("gamePacing")?.addEventListener("change", hostUpdatePacingFromGame);
   $("btnCopyLinkGame")?.addEventListener("click", copyInviteLink);
+  $("btnUndoLastGame")?.addEventListener("click", hostUndoLastAction);
+  $("btnRedealCurrentGame")?.addEventListener("click", hostRedealCurrentBoard);
+  $("btnCopyErrorReportGame")?.addEventListener("click", copyDetailedErrorReport);
+  $("btnCopyErrorReportSide")?.addEventListener("click", copyDetailedErrorReport);
   $("btnTurnAlertFocus")?.addEventListener("click", scrollToCurrentAction);
   $("showAiThoughts").addEventListener("change", hostUpdateSettingsFromLobby);
   $("btnToggleLog").addEventListener("click", () => setLogVisible(!getBool(STORAGE.logVisible, false)));
@@ -371,6 +380,8 @@ function renderTemporalHud() {
 
 function roomPath(code = appState.roomCode) { return `rooms/${code}`; }
 function actionsPath(code = appState.roomCode) { return `rooms/${code}/actions`; }
+function privateHandsPath(code = appState.roomCode) { return `roomPrivateHands/${code}`; }
+function roomUndoPath(code = appState.roomCode) { return `roomUndo/${code}`; }
 
 async function createRoom() {
   if (!appState.connected && !(await connectFirebase())) return;
@@ -394,6 +405,8 @@ async function createRoom() {
       }
     },
     actions: null,
+    actionAudit: null,
+    match: null,
     game: null
   };
   await appState.firebase.set(appState.firebase.ref(appState.firebase.db, roomPath(code)), room);
@@ -495,6 +508,9 @@ async function joinRoomByCode(code, spectator = false, fromInvite = false) {
 }
 function subscribeRoom(code) {
   if (appState.roomUnsub) appState.roomUnsub();
+  stopPrivateHandsSubscription();
+  stopPrivateHandsSubscription();
+  appState.privateHands = {};
   const roomRef = appState.firebase.ref(appState.firebase.db, roomPath(code));
   appState.roomUnsub = appState.firebase.onValue(roomRef, (snap) => {
     const value = snap.val();
@@ -504,6 +520,7 @@ function subscribeRoom(code) {
       return;
     }
     appState.room = normalizeRoom(value);
+    ensurePrivateHandsSubscription();
     maintainPresence();
     renderAll();
     maybeProcessActions();
@@ -514,12 +531,41 @@ function subscribeRoom(code) {
     toast("房間同步失敗");
   });
 }
+function stopPrivateHandsSubscription() {
+  if (appState.privateHandsUnsub) appState.privateHandsUnsub();
+  appState.privateHandsUnsub = null;
+  appState.privateHandsSubKey = null;
+}
+function ensurePrivateHandsSubscription() {
+  if (appState.offline || !appState.connected || !appState.roomCode || !appState.room?.game) return;
+  const mySeat = findSeatByUid(appState.room, appState.uid, appState.clientId);
+  const key = isHost() ? `${appState.roomCode}:host-all` : `${appState.roomCode}:seat-${mySeat ?? "spectator"}`;
+  if (appState.privateHandsSubKey === key) return;
+  stopPrivateHandsSubscription();
+  appState.privateHandsSubKey = key;
+  const path = isHost() ? privateHandsPath(appState.roomCode) : (mySeat == null ? null : `${privateHandsPath(appState.roomCode)}/${mySeat}`);
+  if (!path) { appState.privateHands = {}; appState.room = normalizeRoom(appState.room); renderAll(); return; }
+  appState.privateHandsUnsub = appState.firebase.onValue(appState.firebase.ref(appState.firebase.db, path), (snap) => {
+    const value = snap.val();
+    if (isHost()) appState.privateHands = normalizePrivateHandMap(value || {});
+    else appState.privateHands = mySeat == null ? {} : { [mySeat]: normalizePrivateHandEntry(value || {}) };
+    if (appState.room) appState.room = normalizeRoom(appState.room);
+    renderAll();
+    maybeProcessActions();
+    maybeResolveTrickPause();
+    maybeScheduleBot();
+  }, (error) => {
+    console.warn("private hands sync failed", error);
+    toast("私人手牌同步失敗，請確認 Firebase 規則或重新整理");
+  });
+}
 function normalizeRoom(room) {
   room.lobby ||= { dealer: 2, boardNo: 1, settings: defaultSettingsFromUI("lobby"), seats: {} };
   room.lobby.seats ||= {};
   for (let i = 0; i < 4; i++) if (room.lobby.seats[i] === undefined) room.lobby.seats[i] = null;
   room.lobby.settings ||= defaultSettingsFromUI("lobby");
-  if (room.game) normalizeGame(room.game);
+  room.match ||= defaultMatchState(room.lobby.settings);
+  if (room.game) room.game = hydrateGameForViewer(room.game, room);
   return room;
 }
 function listFromFirebase(value) {
@@ -530,6 +576,109 @@ function listFromFirebase(value) {
     .map((key) => value[key])
     .filter((item) => item !== undefined && item !== null);
 }
+
+function normalizePrivateHandEntry(entry) {
+  if (Array.isArray(entry)) return { current: listFromFirebase(entry), initial: listFromFirebase(entry) };
+  entry ||= {};
+  return { current: listFromFirebase(entry.current || entry.hand || []), initial: listFromFirebase(entry.initial || entry.current || entry.hand || []) };
+}
+function normalizePrivateHandMap(map) {
+  const out = {};
+  for (let seat = 0; seat < 4; seat++) {
+    const entry = map?.[seat] ?? map?.[String(seat)];
+    if (entry) out[seat] = normalizePrivateHandEntry(entry);
+  }
+  return out;
+}
+function privateHandPayloadFromGame(game) {
+  normalizeGame(game);
+  const payload = {};
+  for (let seat = 0; seat < 4; seat++) payload[seat] = { current: listFromFirebase(game.hands?.[seat] || []), initial: listFromFirebase(game.initialHands?.[seat] || game.hands?.[seat] || []) };
+  return payload;
+}
+function publicGameFromFull(fullGame) {
+  const game = structuredCloneCompat(fullGame);
+  normalizeGame(game);
+  const privatePayload = privateHandPayloadFromGame(game);
+  const revealedHands = {};
+  const revealedInitialHands = {};
+  if (game.mode === "standard" && game.dummyVisible && game.dummy != null) revealedHands[game.dummy] = privatePayload[game.dummy].current;
+  if (game.phase === "scoring") {
+    for (let seat = 0; seat < 4; seat++) {
+      revealedHands[seat] = privatePayload[seat].current;
+      revealedInitialHands[seat] = privatePayload[seat].initial;
+    }
+  }
+  game.handCounts = [0, 1, 2, 3].map((seat) => privatePayload[seat].current.length);
+  game.hands = null;
+  game.initialHands = null;
+  game.revealedHands = revealedHands;
+  game.revealedInitialHands = revealedInitialHands;
+  game.security = {
+    design: "firebase-split-public-private-hands",
+    enforcedInClient: true,
+    publicPath: "rooms/{code}/game",
+    privatePath: "roomPrivateHands/{code}/{seat}",
+    actionModel: "players submit intent to rooms/{code}/actions; host validates before state update",
+    limitations: "Pure client-side host arbitration still trusts the host device. Deploy database.rules.secure.example.json for per-seat read restrictions."
+  };
+  return game;
+}
+function hydrateGameForViewer(publicGame, room) {
+  const game = structuredCloneCompat(publicGame || {});
+  const rawHands = game.hands;
+  const rawInitial = game.initialHands;
+  const revealed = game.revealedHands || {};
+  const revealedInitial = game.revealedInitialHands || {};
+  const privateMap = appState.offline ? {} : (appState.privateHands || {});
+  const hands = [];
+  const initialHands = [];
+  for (let seat = 0; seat < 4; seat++) {
+    const privateEntry = privateMap[seat] || privateMap[String(seat)];
+    const revealedCurrent = revealed[seat] ?? revealed[String(seat)];
+    const revealedStart = revealedInitial[seat] ?? revealedInitial[String(seat)];
+    const fallbackCurrent = rawHands ? (rawHands[seat] ?? rawHands[String(seat)]) : [];
+    const fallbackStart = rawInitial ? (rawInitial[seat] ?? rawInitial[String(seat)]) : [];
+    hands[seat] = listFromFirebase(privateEntry?.current || revealedCurrent || fallbackCurrent || []);
+    initialHands[seat] = listFromFirebase(privateEntry?.initial || revealedStart || fallbackStart || hands[seat] || []);
+  }
+  game.hands = hands;
+  game.initialHands = initialHands;
+  game.handCounts = [0, 1, 2, 3].map((seat) => Number(publicGame?.handCounts?.[seat] ?? hands[seat].length ?? 0));
+  return normalizeGame(game);
+}
+function defaultMatchState(settings = {}) {
+  return { mode: settings.scoringMode || "single", boards: [], totalScore: { NS: 0, EW: 0 }, setNo: 1, startedAt: Date.now(), updatedAt: Date.now() };
+}
+function scoreModeLabel(mode) { return mode === "chicago4" ? "Chicago 四副制" : "單副練習"; }
+function prepareMatchForNextGame(room) {
+  const settings = room?.lobby?.settings || {};
+  let match = structuredCloneCompat(room?.match || defaultMatchState(settings));
+  if (match.mode !== (settings.scoringMode || "single")) match = defaultMatchState(settings);
+  match.mode = settings.scoringMode || "single";
+  match.boards ||= [];
+  match.totalScore ||= { NS: 0, EW: 0 };
+  if (room?.game?.phase === "scoring" && room.game.result && !match.boards.some((b) => b.gameId === room.game.id)) {
+    match.boards.push({
+      no: room.game.boardNo,
+      gameId: room.game.id,
+      contract: room.game.contract ? contractText(room.game.contract, room.game.declarer) : "Passed out",
+      result: room.game.result.summary || "已結算",
+      delta: room.game.result.scoreDelta || { NS: 0, EW: 0 },
+      totalAfter: room.game.score || match.totalScore,
+      at: Date.now()
+    });
+    match.totalScore = { NS: Number(room.game.score?.NS || match.totalScore.NS || 0), EW: Number(room.game.score?.EW || match.totalScore.EW || 0) };
+  }
+  if (match.mode === "single") { match.boards = []; match.totalScore = { NS: 0, EW: 0 }; }
+  if (match.mode === "chicago4" && match.boards.length >= 4) {
+    match = { mode: "chicago4", boards: [], totalScore: { NS: 0, EW: 0 }, setNo: Number(match.setNo || 1) + 1, startedAt: Date.now(), updatedAt: Date.now(), lastCompletedSet: match.boards.slice(-4) };
+  }
+  match.updatedAt = Date.now();
+  return match;
+}
+function matchHandNumber(match) { return (listFromFirebase(match?.boards).length % 4) + 1; }
+
 function normalizeGame(game) {
   game.auction = listFromFirebase(game.auction);
   game.currentTrick = listFromFirebase(game.currentTrick);
@@ -641,7 +790,8 @@ function defaultSettingsFromUI(scope = "offline") {
       vulnerability: $("lobbyVulnerability")?.value || "cycle",
       difficulty: Number($("difficulty")?.value || 10),
       showAiThoughts: Boolean($("showAiThoughts")?.checked ?? true),
-      pacingMs: sanitizePacingMs($("lobbyPacing")?.value || AI_ACTION_DELAY_MS)
+      pacingMs: sanitizePacingMs($("lobbyPacing")?.value || AI_ACTION_DELAY_MS),
+      scoringMode: $("lobbyScoringMode")?.value || "single"
     };
   }
   return {
@@ -649,7 +799,8 @@ function defaultSettingsFromUI(scope = "offline") {
     vulnerability: $("offlineVulnerability")?.value || "cycle",
     difficulty: Number($("offlineDifficulty")?.value || 10),
     showAiThoughts: true,
-    pacingMs: sanitizePacingMs($("offlinePacing")?.value || AI_ACTION_DELAY_MS)
+    pacingMs: sanitizePacingMs($("offlinePacing")?.value || AI_ACTION_DELAY_MS),
+    scoringMode: $("offlineScoringMode")?.value || "single"
   };
 }
 function sanitizePacingMs(value) {
@@ -681,6 +832,19 @@ async function updateRoom(patch) {
     renderAll();
     maybeResolveTrickPause();
     maybeScheduleBot();
+    return;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, "game") && patch.game) {
+    const fullGame = normalizeGame(structuredCloneCompat(patch.game));
+    const rootPatch = {};
+    for (const [path, value] of Object.entries(patch)) {
+      if (path === "game") continue;
+      rootPatch[`${roomPath()}/${path}`] = value;
+    }
+    rootPatch[`${roomPath()}/game`] = publicGameFromFull(fullGame);
+    const privatePayload = privateHandPayloadFromGame(fullGame);
+    for (let seat = 0; seat < 4; seat++) rootPatch[`${privateHandsPath()}/${seat}`] = privatePayload[seat];
+    await appState.firebase.update(appState.firebase.ref(appState.firebase.db), rootPatch);
     return;
   }
   await appState.firebase.update(appState.firebase.ref(appState.firebase.db, roomPath()), patch);
@@ -718,6 +882,8 @@ function startOfflineGame() {
       }
     },
     actions: null,
+    actionAudit: null,
+    match: defaultMatchState(settings),
     game: null
   };
   hostStartGame();
@@ -800,6 +966,71 @@ async function hostForceContinueGame() {
   toast("目前沒有可強制處理的 AI 或清桌等待");
 }
 
+
+async function writeUndoSnapshot(fullGame, action) {
+  if (appState.offline) { appState.undoSnapshot = { game: fullGame, action, at: Date.now() }; return; }
+  if (!isHost() || !appState.firebase || !appState.roomCode || !fullGame) return;
+  const payload = { publicGame: publicGameFromFull(fullGame), privateHands: privateHandPayloadFromGame(fullGame), action: sanitizeActionForAudit(action), at: Date.now(), build: BUILD };
+  try { await appState.firebase.set(appState.firebase.ref(appState.firebase.db, roomUndoPath()), payload); }
+  catch (error) { console.warn("write undo snapshot failed", error); }
+}
+async function hostUndoLastAction() {
+  if (!(appState.offline || isHost())) return toast("只有房主可以撤銷");
+  let snapshot = appState.undoSnapshot;
+  if (!appState.offline) {
+    const snap = await appState.firebase.get(appState.firebase.ref(appState.firebase.db, roomUndoPath()));
+    const value = snap.val();
+    if (value?.publicGame) snapshot = { game: hydrateGameForViewer(value.publicGame, appState.room), privateHands: value.privateHands, at: value.at, action: value.action };
+    if (value?.privateHands) {
+      const map = normalizePrivateHandMap(value.privateHands);
+      snapshot.game.hands = [0,1,2,3].map((seat) => listFromFirebase(map[seat]?.current || []));
+      snapshot.game.initialHands = [0,1,2,3].map((seat) => listFromFirebase(map[seat]?.initial || []));
+    }
+  }
+  if (!snapshot?.game) return toast("沒有可撤銷的上一動作");
+  const game = normalizeGame(structuredCloneCompat(snapshot.game));
+  game.log.push(`房主撤銷上一動作，回到 ${new Date(snapshot.at || Date.now()).toLocaleTimeString()} 的狀態。`);
+  await updateRoom({ game, actions: null, "meta/updatedAt": Date.now() });
+  toast("已撤銷上一動作");
+}
+function resetGameToStart(game) {
+  const base = structuredCloneCompat(game);
+  normalizeGame(base);
+  const hands = [0,1,2,3].map((seat) => sortHand(originalHand(base, seat).map((card) => ({...card}))));
+  return {
+    ...base,
+    id: `${base.id || "g"}-redo-${Date.now().toString(36)}`,
+    phase: "auction",
+    currentPlayer: base.dealer,
+    hands,
+    initialHands: hands.map((hand) => hand.map((card) => ({...card}))),
+    handCounts: [13,13,13,13],
+    auction: [],
+    contract: null,
+    declarer: null,
+    dummy: null,
+    openingLeader: null,
+    dummyVisible: false,
+    currentTrick: [],
+    pendingTrick: null,
+    trickHistory: [],
+    tricksWon: { NS: 0, EW: 0 },
+    result: null,
+    score: structuredCloneCompat(base.matchStartScore || { NS: 0, EW: 0 }),
+    log: [`第 ${base.boardNo} 副已由房主重打。本副恢復到發牌後、叫牌前。`],
+    updatedAt: Date.now()
+  };
+}
+async function hostRedealCurrentBoard() {
+  if (!(appState.offline || isHost())) return toast("只有房主可以重打本副");
+  const game = currentGame();
+  if (!game) return toast("目前沒有牌局");
+  if (!confirm("確定要重打本副？目前叫牌與出牌會清空，但保留同一副發牌。")) return;
+  await writeUndoSnapshot(structuredCloneCompat(game), { type: "redeal-current-board", actorSeat: findSeatByUid(appState.room, appState.uid), uid: appState.uid, at: Date.now() });
+  await updateRoom({ game: resetGameToStart(game), actions: null, "meta/updatedAt": Date.now() });
+  toast("已重打本副");
+}
+
 async function hostExtendRoom() {
   if (!isHost()) return;
   await updateRoom({ "meta/expiresAt": Date.now() + 24 * 60 * 60 * 1000, "meta/updatedAt": Date.now() });
@@ -820,6 +1051,7 @@ async function hostStartGame() {
   for (let seat = 0; seat < 4; seat++) {
     if (!room.lobby.seats[seat]) room.lobby.seats[seat] = makeSeat(seat, `bot-${seat}-${Date.now()}`, `${SEATS[seat].name}方電腦`, "bot");
   }
+  room.match = prepareMatchForNextGame(room);
   const game = createNewGame(room);
   const nextDealer = (game.dealer + 1) % 4;
   const patch = {
@@ -828,8 +1060,10 @@ async function hostStartGame() {
     "lobby/seats": room.lobby.seats,
     "lobby/dealer": nextDealer,
     "lobby/boardNo": game.boardNo + 1,
+    match: room.match,
     game,
-    actions: null
+    actions: null,
+    actionAudit: null
   };
   await updateRoom(patch);
   $("resultOverlay").classList.add("hidden");
@@ -842,7 +1076,8 @@ function createNewGame(room) {
   hands.forEach(sortHand);
   const boardNo = Number(room.lobby.boardNo || 1);
   const settings = room.lobby.settings || defaultSettingsFromUI("offline");
-  const vulnerability = resolveVulnerability(settings.vulnerability, boardNo);
+  const match = room.match || defaultMatchState(settings);
+  const vulnerability = resolveVulnerability(settings.vulnerability, boardNo, settings, match);
   const dealer = Number(room.lobby.dealer ?? 2);
   return {
     id: `g-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
@@ -856,9 +1091,10 @@ function createNewGame(room) {
     initialHands: hands.map((hand) => hand.map((card) => ({ ...card }))),
     handCounts: [13, 13, 13, 13],
     security: {
-      design: "public-state-private-hands",
-      policy: "UI never reveals unrevealed hands; deploy secure rules to enforce per-seat private hands at database layer",
-      schemaVersion: 1
+      design: "firebase-split-public-private-hands",
+      policy: "public game state is written without hands; current and initial hands are written to roomPrivateHands/{code}/{seat}",
+      actionModel: "intent submission with host validation",
+      schemaVersion: 2
     },
     auction: [],
     contract: null,
@@ -870,7 +1106,9 @@ function createNewGame(room) {
     pendingTrick: null,
     trickHistory: [],
     tricksWon: { NS: 0, EW: 0 },
-    score: { NS: 0, EW: 0 },
+    score: { NS: Number(match.totalScore?.NS || 0), EW: Number(match.totalScore?.EW || 0) },
+    matchStartScore: { NS: Number(match.totalScore?.NS || 0), EW: Number(match.totalScore?.EW || 0) },
+    matchInfo: { mode: match.mode || settings.scoringMode || "single", setNo: match.setNo || 1, handNo: matchHandNumber(match), boardsPlayed: listFromFirebase(match.boards).length },
     result: null,
     log: [`第 ${boardNo} 副開始。${seatName(dealer)}發牌，身價：${vulnerabilityLabel(vulnerability)}，模式：${modeLabel(settings.mode)}。`],
     createdAt: Date.now(),
@@ -900,7 +1138,11 @@ function sortHand(hand) {
   hand.sort((a, b) => suitWeight[a.suit] - suitWeight[b.suit] || b.order - a.order);
   return hand;
 }
-function resolveVulnerability(setting, boardNo) {
+function resolveVulnerability(setting, boardNo, settings = {}, match = null) {
+  if (settings?.scoringMode === "chicago4") {
+    const chicago = ["none", "ns", "ew", "both"];
+    return chicago[(matchHandNumber(match) - 1) % 4] || "none";
+  }
   if (setting && setting !== "cycle") return setting;
   const cycle = ["none", "ns", "ew", "both", "ns", "ew", "both", "none", "ew", "both", "none", "ns", "both", "none", "ns", "ew"];
   return cycle[(boardNo - 1) % 16] || "none";
@@ -914,6 +1156,7 @@ async function submitAction(action) {
   const fullAction = { ...action, uid: appState.uid, actorSeat: findSeatByUid(appState.room, appState.uid), createdAt: Date.now() };
   if (appState.offline) {
     const next = structuredCloneCompat(game);
+    appState.undoSnapshot = { game: structuredCloneCompat(next), action: fullAction, at: Date.now() };
     const result = applyAction(next, fullAction, appState.room.lobby);
     if (!result.ok) return toast(result.message || "不能這樣操作");
     appState.pendingPlay = null;
@@ -934,18 +1177,47 @@ function maybeProcessActions() {
 async function processNextAction(actionId, action) {
   appState.processingActions = true;
   try {
-    const next = structuredCloneCompat(appState.room.game);
-    const result = applyAction(next, action, appState.room.lobby);
+    const next = structuredCloneCompat(currentGame());
     const patch = { [`actions/${actionId}`]: null, "meta/updatedAt": Date.now() };
-    if (result.ok) patch.game = next;
+    const sourceCheck = validateSubmittedAction(appState.room, next, action);
+    let result = sourceCheck.ok ? applyAction(next, action, appState.room.lobby) : sourceCheck;
+    if (result.ok) {
+      await writeUndoSnapshot(structuredCloneCompat(currentGame()), action);
+      patch.game = next;
+    } else {
+      patch[`actionAudit/${actionId}`] = { ok: false, reason: result.message || "動作未通過驗證", action: sanitizeActionForAudit(action), at: Date.now() };
+      toast(`已拒絕不合法動作：${result.message || "驗證失敗"}`);
+    }
     await updateRoom(patch);
   } catch (error) {
     console.error(error);
-    await updateRoom({ [`actions/${actionId}`]: null, "meta/updatedAt": Date.now() });
+    await updateRoom({ [`actions/${actionId}`]: null, [`actionAudit/${actionId}`]: { ok: false, reason: String(error?.message || error), at: Date.now() }, "meta/updatedAt": Date.now() });
   } finally {
     appState.processingActions = false;
     setTimeout(maybeProcessActions, 50);
   }
+}
+function sanitizeActionForAudit(action) {
+  return { type: action?.type, seat: action?.seat, actorSeat: action?.actorSeat, uid: action?.uid ? String(action.uid).slice(0, 12) : null, call: action?.call || null, cardId: action?.cardId || null, createdAt: action?.createdAt || null };
+}
+function validateSubmittedAction(room, game, action) {
+  const actorSeat = Number(action?.actorSeat);
+  const actionSeat = Number(action?.seat);
+  const player = room?.lobby?.seats?.[actorSeat];
+  if (!Number.isInteger(actorSeat) || actorSeat < 0 || actorSeat > 3) return { ok: false, message: "動作缺少有效座位" };
+  if (!player) return { ok: false, message: "座位不存在" };
+  if (player.type !== "bot" && player.uid !== action.uid) return { ok: false, message: "動作 UID 與座位不符" };
+  if (game.phase === "auction") {
+    if (action.type !== "call") return { ok: false, message: "叫牌階段只能叫牌" };
+    if (actorSeat !== game.currentPlayer || actionSeat !== game.currentPlayer) return { ok: false, message: "不是你的叫牌回合" };
+  }
+  if (["openingLead", "play"].includes(game.phase)) {
+    if (action.type !== "play") return { ok: false, message: "打牌階段只能出牌" };
+    const controller = controllingSeatForCurrentAction(game);
+    if (actorSeat !== controller) return { ok: false, message: "不是你控制的出牌回合" };
+    if (actionSeat !== game.currentPlayer) return { ok: false, message: "出牌座位與目前輪到者不符" };
+  }
+  return { ok: true };
 }
 function applyAction(game, action, lobby) {
   if (!game || game.phase === "scoring") return { ok: false, message: "本副已結束" };
@@ -1463,6 +1735,7 @@ function renderLobby(room) {
   $("difficulty").value = room.lobby.settings.difficulty || 10;
   $("difficultyLabel").textContent = $("difficulty").value;
   if ($("lobbyPacing")) $("lobbyPacing").value = sanitizePacingMs(room.lobby.settings.pacingMs || AI_ACTION_DELAY_MS);
+  if ($("lobbyScoringMode")) $("lobbyScoringMode").value = room.lobby.settings.scoringMode || "single";
   $("showAiThoughts").checked = Boolean(room.lobby.settings.showAiThoughts ?? true);
   const filled = [0, 1, 2, 3].filter((s) => room.lobby.seats[s]).length;
   $("lobbyNotice").textContent = isHost() ? `目前 ${filled}/4 位；可補電腦後開始。` : "等待房主開始。";
@@ -1504,7 +1777,7 @@ function renderPhase(game) {
 }
 function renderContract(game) {
   const lines = [];
-  lines.push(["模式", modeLabel(game.mode)]);
+  lines.push(["模式", `${modeLabel(game.mode)}｜${scoreModeLabel(game.matchInfo?.mode || appState.room?.match?.mode || appState.room?.lobby?.settings?.scoringMode)}`]);
   lines.push(["節奏", `AI / 收牌等待 ${pacingLabel(appState.room?.lobby?.settings)}`]);
   lines.push(["牌號 / 身價", `第 ${game.boardNo} 副｜${vulnerabilityLabel(game.vulnerability)}`]);
   if (game.contract) {
@@ -1523,9 +1796,19 @@ function renderContract(game) {
   $("tableTeamHeads").textContent = `墩數：南北 ${game.tricksWon.NS || 0}｜東西 ${game.tricksWon.EW || 0}`;
 }
 function renderScore(game) {
+  const match = appState.room?.match || defaultMatchState(appState.room?.lobby?.settings || {});
+  let boards = listFromFirebase(match.boards);
+  if (game.phase === "scoring" && game.result && !boards.some((b) => b.gameId === game.id)) {
+    boards = [...boards, { gameId: game.id, contract: game.contract ? contractText(game.contract, game.declarer) : "Passed out", delta: game.result.scoreDelta || { NS: 0, EW: 0 } }];
+  }
+  const chicago = (game.matchInfo?.mode || match.mode) === "chicago4";
+  const boardLine = chicago ? `<div class="score-row"><span>Chicago</span><b>第 ${game.matchInfo?.handNo || matchHandNumber(match)} / 4 副｜第 ${match.setNo || 1} 輪</b></div>` : `<div class="score-row"><span>計分模式</span><b>${scoreModeLabel(match.mode)}</b></div>`;
+  const history = boards.length ? `<div class="match-history">${boards.slice(-4).map((b, idx) => `<span>${idx + 1}. ${escapeHtml(b.contract)}｜NS +${b.delta?.NS || 0} EW +${b.delta?.EW || 0}</span>`).join("")}</div>` : "";
   $("scoreList").innerHTML = `
-    <div class="score-row"><span>南北 NS</span><b>${game.score?.NS || 0}</b></div>
-    <div class="score-row"><span>東西 EW</span><b>${game.score?.EW || 0}</b></div>
+    <div class="score-row"><span>南北 NS 總分</span><b>${game.score?.NS || 0}</b></div>
+    <div class="score-row"><span>東西 EW 總分</span><b>${game.score?.EW || 0}</b></div>
+    ${boardLine}
+    ${history}
   `;
 }
 function renderDealProgress(game, room) {
@@ -1848,14 +2131,15 @@ function gameHealthHtml(game, room) {
 function securityDesignHtml(game, room) {
   const mySeat = findSeatByUid(room, appState.uid, appState.clientId);
   const dummyPublic = Boolean(game?.mode === "standard" && game?.dummyVisible);
-  const secureRuleNote = appState.offline ? "離線局不需 Firebase 規則" : "請部署 database.rules.secure.example.json 後，搭配 public/private 路徑逐步切換";
+  const secureRuleNote = appState.offline ? "離線局不需 Firebase 規則" : "請部署 database.rules.secure.example.json，讓非房主只能讀自己的 private hand";
   return `
     <h3>防作弊資料拆分設計</h3>
     <ul class="security-list">
       <li><b>玩家可見手牌</b><span>${mySeat == null ? "觀戰：只看公開資訊" : `你是 ${SEATS[mySeat].key}，UI 只操作自己的手牌${dummyPublic ? "；夢家已公開" : ""}`}</span></li>
       <li><b>公開狀態</b><span>合約、叫牌、桌面牌、已完成墩、墩數、玩家在線狀態。</span></li>
-      <li><b>私人狀態設計</b><span>每家 13 張牌應拆到 privateHands/{seat}，只允許該座位、房主裁判流程或結束後回放讀取。</span></li>
-      <li><b>部署提醒</b><span>${escapeHtml(secureRuleNote)}。</span></li>
+      <li><b>私人狀態</b><span>多人牌局已把目前手牌與原始手牌寫到 roomPrivateHands/{code}/{seat}；公開 game 不再保存四家手牌。</span></li>
+      <li><b>動作驗證</b><span>真人只送出叫牌/出牌意圖，房主端依 UID、座位、輪到者、合法叫牌與跟牌規則驗證後才更新牌局。</span></li>
+      <li><b>部署提醒</b><span>${escapeHtml(secureRuleNote)}。純前端仍信任房主裝置；真正競賽級防作弊需 Cloud Functions 或可信伺服器。</span></li>
     </ul>
   `;
 }
@@ -1871,10 +2155,13 @@ function inspectGameHealth(game, room) {
   const seatsFilled = [0, 1, 2, 3].filter((seat) => room?.lobby?.seats?.[seat]).length;
   const phaseOk = ["auction", "openingLead", "play", "trickPause", "scoring"].includes(game?.phase);
   const turnOk = game?.phase === "scoring" || (Number.isInteger(game?.currentPlayer) && game.currentPlayer >= 0 && game.currentPlayer <= 3);
-  const cardOk = ids.length === 52 && unique.size === 52;
+  const expectedPrivate = !appState.offline && game?.security?.design === "firebase-split-public-private-hands";
+  const visibleCount = ids.length;
+  const publicCounts = (game?.handCounts || []).reduce((a,b)=>a+Number(b||0),0);
+  const cardOk = expectedPrivate ? (publicCounts + listFromFirebase(game?.currentTrick).length + listFromFirebase(game?.pendingTrick?.plays).length + listFromFirebase(game?.trickHistory).reduce((sum,t)=>sum+listFromFirebase(t?.plays).length,0) === 52 || game.phase === "scoring") : (ids.length === 52 && unique.size === 52);
   const items = [
     { label: "座位", ok: seatsFilled === 4, value: `${seatsFilled}/4 已就位` },
-    { label: "牌張", ok: cardOk, value: `${ids.length}/52 張，唯一 ${unique.size}/52${dupes.length ? `，重複 ${[...new Set(dupes)].join(",")}` : ""}` },
+    { label: "牌張", ok: cardOk, value: expectedPrivate ? `公開狀態不含暗手牌；你目前可見 ${visibleCount} 張，手牌計數合計 ${publicCounts}/52` : `${ids.length}/52 張，唯一 ${unique.size}/52${dupes.length ? `，重複 ${[...new Set(dupes)].join(",")}` : ""}` },
     { label: "階段", ok: phaseOk, value: game?.phase || "未知" },
     { label: "輪到", ok: turnOk, value: game?.phase === "scoring" ? "已結束" : `${SEATS[game?.currentPlayer]?.key || "?"} ${seatName(game?.currentPlayer)}` },
     { label: "房間", ok: Boolean(room?.meta?.code || appState.offline), value: room?.meta?.code || (appState.offline ? "離線局" : "未知") }
@@ -2024,10 +2311,11 @@ function renderTable(room) {
     if (game.openingLeader === seat && ["openingLead", "play", "trickPause"].includes(game.phase)) tags.push(`<span class="tag">首攻</span>`);
     if (game.mode === "standard" && game.dummy === seat) tags.push(`<span class="tag">夢家</span>`);
     const visible = isSeatHandVisible(game, seat, mySeat);
-    const mini = visible ? `<div class="seat-mini-hand">${(game.hands[seat] || []).slice(0, 13).map((c) => miniCardHtml(c)).join("")}</div>` : `<div class="seat-mini-hand">${Array.from({ length: Math.min(13, game.hands[seat]?.length || 0) }, () => `<span class="mini-card">🂠</span>`).join("")}</div>`;
+    const displayCount = game.handCounts?.[seat] ?? game.hands[seat]?.length ?? 0;
+    const mini = visible ? `<div class="seat-mini-hand">${(game.hands[seat] || []).slice(0, 13).map((c) => miniCardHtml(c)).join("")}</div>` : `<div class="seat-mini-hand">${Array.from({ length: Math.min(13, displayCount) }, () => `<span class="mini-card">🂠</span>`).join("")}</div>`;
     el.innerHTML = `
       <div class="seat-head"><span class="seat-name">${seatName(seat)}</span><span>${SEATS[seat].key}</span></div>
-      <div class="seat-meta">${escapeHtml(player?.name || "空位")}｜${teamOf(seat)}｜${isVulnerable(game.vulnerability, teamOf(seat)) ? "有身價" : "無身價"}｜手牌 ${game.hands[seat]?.length || 0}｜本方 ${game.tricksWon?.[teamOf(seat)] || 0} 墩</div>
+      <div class="seat-meta">${escapeHtml(player?.name || "空位")}｜${teamOf(seat)}｜${isVulnerable(game.vulnerability, teamOf(seat)) ? "有身價" : "無身價"}｜手牌 ${displayCount}｜本方 ${game.tricksWon?.[teamOf(seat)] || 0} 墩</div>
       <div class="seat-tags">${tags.join("")}</div>${mini}
     `;
     const liveWinningPlay = currentWinningPlay(game.currentTrick || [], game.contract?.suit);
@@ -2393,7 +2681,7 @@ function cardHtml(card, opts = {}) {
 function miniCardHtml(card) { return `<span class="mini-card ${cardColor(card)}">${escapeHtml(card.rank)}${suitSymbolHtml(card.suit)}</span>`; }
 function cardColor(card) { return SUITS[card.suit]?.color === "red" ? "red" : "black"; }
 
-function currentGame() { return appState.room?.game || null; }
+function currentGame() { return appState.room?.game ? hydrateGameForViewer(appState.room.game, appState.room) : null; }
 function seatName(seat) { return `${SEATS[seat]?.name || "?"}家`; }
 function nextSeat(seat) { return (Number(seat) + 1) % 4; }
 function partnerOf(seat) { return (Number(seat) + 2) % 4; }
@@ -2432,6 +2720,8 @@ async function leaveRoom(silent = false) {
   if (!silent) await markOwnSeatOffline();
   stopPresenceHeartbeat();
   if (appState.roomUnsub) appState.roomUnsub();
+  stopPrivateHandsSubscription();
+  appState.privateHands = {};
   appState.roomUnsub = null;
   appState.room = null;
   appState.roomCode = null;
@@ -2520,12 +2810,41 @@ function restoreLocalDataFromDialog() {
     setTimeout(() => location.reload(), 500);
   } catch { toast("JSON 格式不正確"); }
 }
-async function copyErrorReport() {
-  const report = { build: BUILD, userAgent: navigator.userAgent, room: appState.roomCode, connected: appState.connected, status: appState.room?.meta?.status, time: new Date().toISOString() };
-  await copyText(JSON.stringify(report, null, 2));
-  toast("已複製錯誤回報");
+function buildDetailedErrorReport() {
+  const game = currentGame();
+  const health = game ? inspectGameHealth(game, appState.room) : null;
+  const safeRoom = structuredCloneCompat(appState.room || {});
+  if (safeRoom.game) safeRoom.game = publicGameFromFull(currentGame() || safeRoom.game);
+  return {
+    build: BUILD,
+    time: new Date().toISOString(),
+    userAgent: navigator.userAgent,
+    url: location.href,
+    roomCode: appState.roomCode,
+    connected: appState.connected,
+    offline: appState.offline,
+    spectator: appState.spectator,
+    mySeat: appState.room ? findSeatByUid(appState.room, appState.uid, appState.clientId) : null,
+    status: appState.room?.meta?.status,
+    phase: game?.phase,
+    currentPlayer: game?.currentPlayer,
+    contract: game?.contract ? contractText(game.contract, game.declarer) : null,
+    auction: listFromFirebase(game?.auction).map((c) => `${SEATS[c.seat]?.key || "?"}:${callText(c)}`),
+    currentTrick: listFromFirebase(game?.currentTrick).map((p) => `${SEATS[p.seat]?.key || "?"}:${p.card?.label}`),
+    handCounts: game?.handCounts,
+    lastLog: listFromFirebase(game?.log).slice(-30),
+    actionAudit: appState.room?.actionAudit || null,
+    match: appState.room?.match || null,
+    health,
+    publicRoom: safeRoom
+  };
 }
-async function copySupportBundle() { await copyText(JSON.stringify({ report: collectLocalData(), room: appState.room, build: BUILD }, null, 2)); toast("已複製維護包"); }
+async function copyDetailedErrorReport() {
+  await copyText(JSON.stringify(buildDetailedErrorReport(), null, 2));
+  toast("已複製詳細錯誤回報");
+}
+async function copyErrorReport() { return copyDetailedErrorReport(); }
+async function copySupportBundle() { await copyText(JSON.stringify({ report: collectLocalData(), errorReport: buildDetailedErrorReport(), build: BUILD }, null, 2)); toast("已複製維護包"); }
 function resetLocalData() { if (confirm("確定要重置本機資料？")) { Object.values(STORAGE).forEach((k) => localStorage.removeItem(k)); location.reload(); } }
 
 function runDiagnostics() {
@@ -2635,7 +2954,7 @@ function handRecordText(game = currentGame(), room = appState.room) {
   lines.push("四家原始手牌：");
   for (const seat of [0, 1, 2, 3]) {
     const original = originalHand(game, seat);
-    lines.push(`${SEATS[seat].key} ${seatName(seat)}：${handBySuitText(original)}（${handHcp(original)} HCP）`);
+    lines.push(`${SEATS[seat].key} ${seatName(seat)}：${original.length ? handBySuitText(original) : "未公開 / 無權限讀取"}${original.length ? `（${handHcp(original)} HCP）` : ""}`);
   }
   lines.push("");
   lines.push("叫牌：");

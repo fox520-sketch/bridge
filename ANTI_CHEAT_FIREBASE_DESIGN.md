@@ -1,18 +1,17 @@
-# v1.0.18 防作弊資料拆分設計
+# v1.0.19 防作弊資料拆分實作
 
-本版加入防作弊資料拆分設計與 UI 可見性檢查，目標是讓多人真人局逐步從「公開整份房間狀態」移到「公開牌局狀態 + 各座位私人手牌」。
+本版已把多人真人局從「公開整份房間狀態」改成「公開牌局狀態 + 各座位私人手牌」。仍保留純前端房主仲裁，因此可防止一般非房主玩家讀取公開房間節點偷看手牌，但競賽級防作弊仍需要可信伺服器或 Cloud Functions。
 
 ## 建議資料路徑
 
 ```text
-rooms/{room}/public
-  meta, lobby, gamePublic, actions, presence
-rooms/{room}/privateHands/{seat}
-  cards: 只存該座位仍持有的手牌
-rooms/{room}/reveal/{seat}
-  revealed: 標準模式夢家首攻後公開，或牌局結束後公開
-rooms/{room}/audit
-  host / 裁判流程用於驗證動作與重播
+rooms/{code}
+  meta, lobby, game, actions, actionAudit, match
+roomPrivateHands/{code}/{seat}
+  current: 該座位目前手牌
+  initial: 該座位原始手牌
+roomUndo/{code}
+  publicGame + privateHands snapshot：房主撤銷上一動作用
 ```
 
 ## 公開資料

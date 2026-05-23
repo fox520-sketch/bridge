@@ -167,6 +167,13 @@
               <option value="5000">5 秒｜教學慢速</option>
             </select>
           </label>
+          <label class="mini-field">
+            <span>計分模式</span>
+            <select id="offlineScoringMode">
+              <option value="single" selected>單副練習</option>
+              <option value="chicago4">Chicago 四副制</option>
+            </select>
+          </label>
           <button id="btnStartOffline" class="primary" type="button">單人離線開始</button>
         </div>
       </div>
@@ -320,6 +327,14 @@
               </select>
               <small>同時控制 AI 叫牌、AI 出牌與每墩清桌等待時間。</small>
             </label>
+            <label class="field">
+              <span>計分模式</span>
+              <select id="lobbyScoringMode">
+                <option value="single" selected>單副練習</option>
+                <option value="chicago4">Chicago 四副制｜4 副總分</option>
+              </select>
+              <small>Chicago 會連續記錄四副總分，身價依四副循環。</small>
+            </label>
             <label class="check"><input id="showAiThoughts" type="checkbox" checked /> 顯示 AI 思路紀錄</label>
           </div>
           <button id="btnStartGame" class="primary big host-only hidden" type="button">開始對戰</button>
@@ -374,8 +389,11 @@
           <div class="button-row">
             <button id="btnTakeOverCurrentGame" class="ghost" type="button">接管目前輪到者</button>
             <button id="btnForceContinueGame" class="ghost" type="button">立即處理等待</button>
+            <button id="btnUndoLastGame" class="ghost" type="button">撤銷上一動作</button>
+            <button id="btnRedealCurrentGame" class="ghost" type="button">重打本副</button>
             <button id="btnTakeOverOfflineGame" class="ghost" type="button">接管全部離線玩家</button>
             <button id="btnCopyLinkGame" class="ghost" type="button">複製邀請連結</button>
+            <button id="btnCopyErrorReportGame" class="ghost" type="button">複製錯誤回報</button>
             <button id="btnCloseRoomGame" class="ghost danger-ghost" type="button">關閉房間</button>
           </div>
         </div>
@@ -443,6 +461,7 @@
             <button id="btnCopyHandRecordGame" class="ghost" type="button">複製完整牌譜</button>
             <button id="btnDownloadHandRecordGame" class="ghost" type="button">下載 TXT</button>
             <button id="btnCopyReviewGame" class="ghost" type="button">複製檢討</button>
+            <button id="btnCopyErrorReportSide" class="ghost" type="button">複製錯誤回報</button>
           </div>
         </section>
         <section class="record-panel" data-record-tab="auction">
@@ -504,23 +523,12 @@
         <p class="eyebrow">Release</p>
         <h2>本版更新</h2>
         <ul>
-          <li>新增手機快速跳轉列，可一鍵跳到牌桌、操作、手牌與紀錄。</li>
-          <li>新增「出牌前確認」與手牌排序切換，降低手機誤觸並改善牌感。</li>
-          <li>牌桌座位新增發牌、有身價、首攻與本方墩數標示。</li>
-          <li>房主新增「立即處理等待」，可直接收牌或立刻執行 AI 動作。</li>
-          <li>新增「牌局檢討」與「牌局健康檢查」，可在牌局中即時查看合約方是否達標、牌張同步是否正常，並可下載 TXT 牌譜。</li>
-          <li>新增「等待狀態」卡：顯示目前輪到誰、真人 / AI / 離線狀態，以及 AI 思考或清桌倒數。</li>
-          <li>房主新增「接管目前輪到者」，只接管正在卡住的離線真人座位。</li>
-          <li>牌局畫面每秒刷新局勢摘要、玩家在線狀態與桌面倒數，手機上更容易判斷現在在等誰。</li>
-          <li>新增「輪到你」醒目提示列，輪到叫牌或出牌時會音效/震動提醒，並可一鍵跳到操作區。</li>
-          <li>新增教練建議：輪到你時會提示建議叫品或建議出牌，也可一鍵套用。</li>
-          <li>房主可在牌局中調整本局節奏，也能直接複製邀請連結。</li>
-          <li>新增可調整「遊戲節奏」：AI 叫牌、AI 出牌與清桌等待可選快速、標準或教學慢速。</li>
-          <li>新增牌局「局勢摘要」與瀏覽器標題提示，輪到你操作時更容易注意到。</li>
-          <li>全域修正花色顏色：紅心 <span class="suit-symbol red">♥</span>、方塊 <span class="suit-symbol red">♦</span> 會在牌桌、紀錄、提示與結果中顯示紅色。</li>
-          <li>從拿破崙與秘書改為 4 人合約橋牌。</li>
-          <li>新增兩種模式：標準夢家亮牌、閉手四人暗牌變體。</li>
-          <li>保留 Firebase 開房間、QR 邀請、觀戰、電腦補位、統計、PWA、分享與維護工具。</li>
+          <li>多人牌局正式拆分公開狀態與私人手牌，公開房間資料不再保存四家暗牌。</li>
+          <li>新增動作提交 / 房主合法性驗證：真人只送出叫牌或出牌意圖，通過驗證才更新牌局。</li>
+          <li>新增 Chicago 四副制與總分表，可選單副練習或四副累計總分。</li>
+          <li>房主新增「撤銷上一動作」與「重打本副」，方便處理誤觸與同步問題。</li>
+          <li>新增詳細錯誤回報，會包含版本、房號、階段、叫牌、目前桌面牌、健康檢查、最近紀錄與 action audit。</li>
+          <li>保留 v1.0.18 的自然制叫牌 AI、叫牌教學理由、逐步回放與手機紀錄抽屜。</li>
         </ul>
         <button id="btnOpenTutorialFromRelease" class="ghost" type="button">打開教學</button>
       </div>
