@@ -110,7 +110,6 @@
         </div>
         <div class="experience-controls">
           <label class="check compact-check"><input id="touchComfortToggle" type="checkbox" /> 手機大牌模式</label>
-          <label class="check compact-check"><input id="confirmPlayToggle" type="checkbox" /> 出牌前確認</label>
           <label class="mini-field sound-profile-field">
             <span>音效風格</span>
             <select id="soundProfile">
@@ -167,25 +166,6 @@
               <option value="5000">5 秒｜教學慢速</option>
             </select>
           </label>
-          <label class="mini-field">
-            <span>計分模式</span>
-            <select id="offlineScoringMode">
-              <option value="single" selected>單副練習</option>
-              <option value="chicago4">Chicago 4 副制</option>
-                <option value="chicago8">Chicago 8 副制</option>
-                <option value="chicago12">Chicago 12 副制</option>
-                <option value="chicago16">Chicago 16 副制</option>
-            </select>
-          </label>
-          <label class="mini-field">
-            <span>叫牌制度</span>
-            <select id="offlineBiddingSystem">
-              <option value="beginner" selected>新手自然制</option>
-              <option value="sayc">SAYC 風格</option>
-              <option value="simplified">簡化模式：不用 Double</option>
-              <option value="teaching">教學模式：理由更白話</option>
-            </select>
-          </label>
           <button id="btnStartOffline" class="primary" type="button">單人離線開始</button>
         </div>
       </div>
@@ -218,19 +198,6 @@
         <button id="btnRunDiagnostics" class="ghost" type="button">執行系統測試</button>
       </div>
 
-      <div class="tool-card debug-recorder-card">
-        <div>
-          <h3>實戰測試紀錄器</h3>
-          <p class="hint">自動記錄進房、開局、叫牌、出牌、結算與同步狀態。遇到問題可下載 debug-report.json 給開發者分析。</p>
-          <p class="hint compact">報告會包含最近事件、錯誤回報、Firebase 診斷與本機統計，不會額外上傳資料。</p>
-        </div>
-        <div class="tool-actions">
-          <button id="btnDownloadDebugReport" class="ghost" type="button">下載 debug-report.json</button>
-          <button id="btnCopyDebugReport" class="ghost" type="button">複製 Debug 報告</button>
-          <button id="btnClearDebugEvents" class="ghost" type="button">清除測試紀錄</button>
-        </div>
-      </div>
-
       <div class="tool-card stats-card">
         <div>
           <h3>本機統計與維護</h3>
@@ -242,26 +209,12 @@
           <button id="btnShowLocalStats" class="ghost" type="button">更新統計</button>
           <button id="btnShareStats" class="ghost" type="button">分享戰績</button>
           <button id="btnShareAchievements" class="ghost" type="button">分享成就</button>
-          <button id="btnDownloadHistory" class="ghost" type="button">下載牌局歷史</button>
-          <button id="btnClearHistory" class="ghost" type="button">清除歷史</button>
           <button id="btnExportLocalData" class="ghost" type="button">匯出資料</button>
           <button id="btnImportLocalData" class="ghost" type="button">還原資料</button>
           <button id="btnCopyErrorReport" class="ghost" type="button">複製錯誤回報</button>
           <button id="btnCopySupportBundle" class="ghost" type="button">複製維護包</button>
           <button id="btnClearPwaCache" class="ghost" type="button">清除舊快取</button>
           <button id="btnResetLocalData" class="ghost danger-ghost" type="button">重置本機資料</button>
-        </div>
-      </div>
-
-      <div class="tool-card deploy-test-card">
-        <div>
-          <h3>實機測試與部署檢查</h3>
-          <p class="hint">v1.0.24 新增 debug-report.json、叫牌制度、回放升級、牌局歷史與手機操作細修。可用一台裝置切換 N/E/S/W 視角，或檢查 Auth、Database、私人手牌與 action queue 基礎路徑。</p>
-          <div id="deploymentCheckStatus" class="diagnostic-status deploy-check-status">尚未執行 Firebase 部署檢查。</div>
-        </div>
-        <div class="tool-actions">
-          <button id="btnStartSeatSimulator" class="ghost" type="button">四人視角模擬</button>
-          <button id="btnRunFirebaseDeployCheck" class="ghost" type="button">Firebase 部署檢查</button>
         </div>
       </div>
 
@@ -313,9 +266,6 @@
           <h3>座位</h3>
           <p class="hint compact">四個座位固定為北、東、南、西；南北同隊，東西同隊。真人不足時可由房主補電腦。</p>
           <div id="lobbySeats" class="seat-list"></div>
-          <div class="button-row">
-            <button id="btnToggleReady" class="ghost" type="button">我準備好了</button>
-          </div>
           <div class="button-row host-only hidden">
             <button id="btnAddBot" class="ghost" type="button">補一位電腦</button>
             <button id="btnRemoveBot" class="ghost" type="button">移除電腦</button>
@@ -326,8 +276,6 @@
             <div class="button-row">
               <button id="btnTakeOverOfflineLobby" class="ghost" type="button">離線玩家改電腦</button>
               <button id="btnExtendRoomLobby" class="ghost" type="button">延長 24 小時</button>
-              <label class="mini-field compact-transfer"><span>轉讓房主</span><select id="transferHostSeat"></select></label>
-              <button id="btnTransferHost" class="ghost" type="button">轉讓房主</button>
               <button id="btnCopyRoomMaintenanceLobby" class="ghost" type="button">複製維護摘要</button>
               <button id="btnCloseRoomLobby" class="ghost danger-ghost" type="button">關閉房間</button>
             </div>
@@ -371,30 +319,7 @@
               </select>
               <small>同時控制 AI 叫牌、AI 出牌與每墩清桌等待時間。</small>
             </label>
-            <label class="field">
-              <span>計分模式</span>
-              <select id="lobbyScoringMode">
-                <option value="single" selected>單副練習</option>
-                <option value="chicago4">Chicago 4 副制｜4 副總分</option>
-                <option value="chicago8">Chicago 8 副制｜8 副總分</option>
-                <option value="chicago12">Chicago 12 副制｜12 副總分</option>
-                <option value="chicago16">Chicago 16 副制｜16 副總分</option>
-              </select>
-              <small>Chicago 可選 4 / 8 / 12 / 16 副，身價依四副循環，結束後產生賽後報告。</small>
-            </label>
-            <label class="field">
-              <span>叫牌制度</span>
-              <select id="lobbyBiddingSystem">
-                <option value="beginner" selected>新手自然制｜保守少約定</option>
-                <option value="sayc">SAYC 風格｜五張高花、15–17 1NT、Stayman / Transfer</option>
-                <option value="simplified">簡化模式｜不使用 Double / Redouble</option>
-                <option value="teaching">教學模式｜每個叫品理由更白話</option>
-              </select>
-              <small>會影響 AI 叫牌、教練建議與叫牌按鈕合法性；簡化模式會關閉 Double / Redouble。</small>
-            </label>
             <label class="check"><input id="showAiThoughts" type="checkbox" checked /> 顯示 AI 思路紀錄</label>
-            <label class="check"><input id="allowSpectators" type="checkbox" checked /> 開放觀戰加入</label>
-            <label class="check"><input id="allowBotFill" type="checkbox" checked /> 允許 AI 補位</label>
           </div>
           <button id="btnStartGame" class="primary big host-only hidden" type="button">開始對戰</button>
           <p id="lobbyNotice" class="hint"></p>
@@ -403,14 +328,6 @@
     </section>
 
     <main id="gameView" class="game hidden">
-      <div id="turnAlert" class="turn-alert hidden" role="status" aria-live="polite">
-        <div>
-          <b id="turnAlertTitle">輪到你</b>
-          <span id="turnAlertText">請完成操作。</span>
-        </div>
-        <button id="btnTurnAlertFocus" class="primary" type="button">前往操作</button>
-      </div>
-      <nav id="mobileQuickNav" class="mobile-quick-nav hidden" aria-label="手機快速跳轉"></nav>
       <aside class="left-panel panel">
         <button id="btnGameExit" class="ghost game-exit" type="button">返回主畫面</button>
         <div class="phase-card">
@@ -427,48 +344,13 @@
           <div id="scoreList"></div>
         </div>
         <div id="dealProgress" class="deal-progress-card"></div>
-        <div id="turnWaitCard" class="wait-card hidden" aria-live="polite"></div>
         <div id="actionPanel" class="actions"></div>
         <div id="gameRoomStatus" class="room-status-card game-room-status hidden" aria-live="polite"></div>
         <div id="gameHostTools" class="host-tools host-only hidden">
           <h4>多人維護</h4>
           <p class="hint compact">若真人斷線卡住，房主可讓電腦接手離線座位或關閉房間。</p>
-          <div class="game-controls-grid">
-            <label class="mini-field">
-              <span>本局節奏</span>
-              <select id="gamePacing">
-                <option value="800">0.8 秒｜快速</option>
-                <option value="1200">1.2 秒｜偏快</option>
-                <option value="2000">2 秒｜標準</option>
-                <option value="3000">3 秒｜看清楚</option>
-                <option value="5000">5 秒｜教學慢速</option>
-              </select>
-            </label>
-          </div>
-          <div class="test-view-tools">
-            <b>座位視角模擬</b>
-            <div class="button-row compact-actions">
-              <button class="ghost tiny" type="button" data-test-view-seat="0">北 N</button>
-              <button class="ghost tiny" type="button" data-test-view-seat="1">東 E</button>
-              <button class="ghost tiny" type="button" data-test-view-seat="2">南 S</button>
-              <button class="ghost tiny" type="button" data-test-view-seat="3">西 W</button>
-              <button class="ghost tiny" type="button" data-test-view-seat="spectator">觀戰</button>
-              <button class="ghost tiny" type="button" data-test-view-seat="clear">關閉</button>
-            </div>
-            <p class="hint compact">四人視角模擬局可直接切換座位操作；線上局只建議用來檢查視角，不建議代替其他真人行動。</p>
-          </div>
           <div class="button-row">
-            <button id="btnTakeOverCurrentGame" class="ghost" type="button">接管目前輪到者</button>
-            <button id="btnForceContinueGame" class="ghost" type="button">立即處理等待</button>
-            <button id="btnRepairStuckGame" class="ghost" type="button">一鍵修復卡住</button>
-            <button id="btnUndoLastGame" class="ghost" type="button">撤銷上一動作</button>
-            <button id="btnUndoTrickGame" class="ghost" type="button">撤銷整墩</button>
-            <button id="btnUndoToPlayStartGame" class="ghost" type="button">撤銷到叫牌結束</button>
-            <button id="btnRedealCurrentGame" class="ghost" type="button">重打本副</button>
-            <button id="btnTakeOverOfflineGame" class="ghost" type="button">接管全部離線玩家</button>
-            <button id="btnCopyLinkGame" class="ghost" type="button">複製邀請連結</button>
-            <button id="btnCopyErrorReportGame" class="ghost" type="button">複製錯誤回報</button>
-            <button id="btnDownloadErrorSnapshotGame" class="ghost" type="button">下載 JSON 快照</button>
+            <button id="btnTakeOverOfflineGame" class="ghost" type="button">接管離線玩家</button>
             <button id="btnCloseRoomGame" class="ghost danger-ghost" type="button">關閉房間</button>
           </div>
         </div>
@@ -498,67 +380,34 @@
               <h3 id="handTitle">你的手牌</h3>
               <p id="handHint">依目前階段操作。</p>
             </div>
-            <div class="hand-header-tools">
-              <label class="mini-field hand-sort-field">
-                <span>排序</span>
-                <select id="handSortMode" aria-label="手牌排序">
-                  <option value="suit">花色排序</option>
-                  <option value="rank">牌點排序</option>
-                  <option value="redblack">紅黑交錯</option>
-                </select>
-              </label>
-              <div id="handCount" class="pill"></div>
-            </div>
+            <div id="handCount" class="pill"></div>
           </div>
           <div id="handAnalysis" class="hand-analysis" aria-live="polite"></div>
-          <div id="handSuggestion" class="hand-suggestion hidden" aria-live="polite"></div>
           <div id="handActionPanel" class="inline-actions hidden" aria-live="polite"></div>
           <div id="hand" class="hand"></div>
         </div>
       </section>
 
-      <aside class="right-panel panel log-panel drawer-collapsed" id="recordsDrawer" data-mobile-tab="tools">
-        <div class="record-mobile-head">
-          <b>紀錄 / 檢討</b>
-          <button id="btnRecordDrawerToggle" class="ghost tiny" type="button">展開</button>
-        </div>
-        <div class="record-tabs" role="tablist" aria-label="牌局紀錄分頁">
-          <button type="button" data-record-tab-btn="tools" class="active">工具</button>
-          <button type="button" data-record-tab-btn="auction">叫牌</button>
-          <button type="button" data-record-tab-btn="review">檢討</button>
-          <button type="button" data-record-tab-btn="tricks">出牌</button>
-          <button type="button" data-record-tab-btn="log">紀錄</button>
-        </div>
-        <section class="record-panel game-tools-panel" data-record-tab="tools">
+      <aside class="right-panel panel log-panel">
+        <section class="record-panel game-tools-panel">
           <h3>牌局工具</h3>
           <p class="hint compact">可複製完整牌譜，方便分享、回報問題或賽後檢討。</p>
-          <div class="button-row">
-            <button id="btnCopyHandRecordGame" class="ghost" type="button">複製完整牌譜</button>
-            <button id="btnDownloadHandRecordGame" class="ghost" type="button">下載 TXT</button>
-            <button id="btnCopyReviewGame" class="ghost" type="button">複製檢討</button>
-            <button id="btnCopyErrorReportSide" class="ghost" type="button">複製錯誤回報</button>
-            <button id="btnDownloadErrorSnapshotSide" class="ghost" type="button">下載 JSON 快照</button>
-          </div>
+          <div class="button-row"><button id="btnCopyHandRecordGame" class="ghost" type="button">複製完整牌譜</button></div>
         </section>
-        <section id="syncTestPanel" class="record-panel sync-panel" data-record-tab="tools" aria-live="polite"></section>
-        <section class="record-panel" data-record-tab="auction">
+        <section class="record-panel">
           <h3>叫牌紀錄表</h3>
           <div id="auctionRecord" class="record-scroll" aria-live="polite"></div>
         </section>
-        <section id="postHandReview" class="record-panel review-panel" data-record-tab="review" aria-live="polite"></section>
-        <section id="gameHealthPanel" class="record-panel health-panel" data-record-tab="review" aria-live="polite"></section>
-        <section class="record-panel" data-record-tab="tricks">
+        <section class="record-panel">
           <h3>每墩出牌紀錄</h3>
           <div id="trickRecord" class="record-scroll" aria-live="polite"></div>
         </section>
-        <section class="record-panel log-record-panel" data-record-tab="log">
-          <div class="log-header">
-            <h3>牌局紀錄</h3>
-            <button id="btnToggleLog" class="ghost log-toggle" type="button">顯示紀錄</button>
-          </div>
-          <p id="logSummary" class="log-summary">牌局紀錄已隱藏。</p>
-          <div id="log" class="log"></div>
-        </section>
+        <div class="log-header">
+          <h3>牌局紀錄</h3>
+          <button id="btnToggleLog" class="ghost log-toggle" type="button">顯示紀錄</button>
+        </div>
+        <p id="logSummary" class="log-summary">牌局紀錄已隱藏。</p>
+        <div id="log" class="log"></div>
       </aside>
     </main>
 
@@ -600,25 +449,12 @@
         <p class="eyebrow">Release</p>
         <h2>本版更新</h2>
         <ul>
-          <li>v1.0.24：新增實戰測試紀錄器 / debug-report.json、叫牌制度選項、回放升級、牌局歷史與手機誤觸防護。</li>
-          <li class="old-note">v1.0.23：新增四人座位視角模擬、Firebase 部署檢查器、出牌 AI 第三版、正式大廳與新手教學第三章。</li>
-          <li class="old-note">v1.0.22：Firebase rules 正式強化，私人手牌、action queue 與房主/仲裁者權限分流更清楚。</li>
-          <li>房主 / 仲裁者轉移再強化：房主離線超過安全等待時間後，新仲裁者用交易式寫入接手，降低雙房主風險。</li>
-          <li>Chicago 可選 4 / 8 / 12 / 16 副，賽後報告會列出每副合約、結果、分數與累計分。</li>
-          <li>新增新手教學任務第二章：合約與成局，練習看懂目標墩數、王牌/無王、成局與計分。</li>
-          <li>手機橫向與底部安全區細修，手牌、操作列與紀錄抽屜更避開瀏覽器工具列。</li>
-          <li class="old-note">v1.0.21：新增多人同步 / action queue 測試面板，能看到 pending / processing / rejected / processed 狀態。</li>
-          <li>新增卡住自動偵測與房主一鍵修復，可處理 stale action、AI 逾時與清桌逾時。</li>
-          <li>出牌 AI 升級第二版：加入首攻、無王長門、有王抽王、第三家高、低張墊牌等基礎策略。</li>
-          <li>觀戰模式正式化：房主可開關觀戰，觀戰者只看公開資訊，結束後才看四手全牌。</li>
-          <li>新增新手教學任務第一章：跟牌與一墩，會依牌局進度顯示任務。</li>
-          <li>保留多人防作弊資料拆分、Chicago、進階撤銷、手機專用牌桌與 JSON 診斷。</li>
-          <li class="old-note">v1.0.19：多人牌局正式拆分公開狀態與私人手牌，公開房間資料不再保存四家暗牌。</li>
-          <li>新增動作提交 / 房主合法性驗證：真人只送出叫牌或出牌意圖，通過驗證才更新牌局。</li>
-          <li>新增 Chicago 四副制與總分表，可選單副練習或四副累計總分。</li>
-          <li>房主新增「撤銷上一動作」與「重打本副」，方便處理誤觸與同步問題。</li>
-          <li>新增詳細錯誤回報，會包含版本、房號、階段、叫牌、目前桌面牌、健康檢查、最近紀錄與 action audit。</li>
-          <li>保留 v1.0.18 的自然制叫牌 AI、叫牌教學理由、逐步回放與手機紀錄抽屜。</li>
+          <li>新增可調整「遊戲節奏」：AI 叫牌、AI 出牌與清桌等待可選快速、標準或教學慢速。</li>
+          <li>新增牌局「局勢摘要」與瀏覽器標題提示，輪到你操作時更容易注意到。</li>
+          <li>全域修正花色顏色：紅心 <span class="suit-symbol red">♥</span>、方塊 <span class="suit-symbol red">♦</span> 會在牌桌、紀錄、提示與結果中顯示紅色。</li>
+          <li>從拿破崙與秘書改為 4 人合約橋牌。</li>
+          <li>新增兩種模式：標準夢家亮牌、閉手四人暗牌變體。</li>
+          <li>保留 Firebase 開房間、QR 邀請、觀戰、電腦補位、統計、PWA、分享與維護工具。</li>
         </ul>
         <button id="btnOpenTutorialFromRelease" class="ghost" type="button">打開教學</button>
       </div>
@@ -648,8 +484,6 @@
           <article><h3>標準夢家模式</h3><p>莊家左手首攻。首攻翻開後，夢家攤牌，夢家的牌由莊家指揮。夢家本人不能自行建議或出牌。</p></article>
           <article><h3>閉手變體模式</h3><p>取消夢家。首攻後同伴牌仍不公開，四個真人或電腦都自行決定自己的出牌。叫牌與計分仍沿用合約橋牌。</p></article>
           <article><h3>計分</h3><p>低花每線位墩 20，高花 30，NT 第一墩 40 後續 30。基本分達 100 是成局；滿貫與身價會增加獎分或罰分。</p></article>
-          <article><h3>叫牌制度</h3><p>可選新手自然制、SAYC 風格、簡化模式或教學模式；簡化模式會關閉 Double / Redouble。</p></article>
-          <article><h3>回放檢討</h3><p>回放支援逐墩跳轉、速度設定、合法牌與教練建議，方便檢討每一次出牌。</p></article>
         </div>
         <div class="button-row dialog-actions">
           <button id="btnTutorialEnableHints" class="primary" type="button">開啟玩家提示</button>
@@ -722,8 +556,6 @@
         <div class="result-buttons">
           <button id="resultReplay" class="ghost" type="button">牌局回放</button>
           <button id="resultCopyHandRecord" class="ghost" type="button">複製牌譜</button>
-          <button id="resultDownloadHandRecord" class="ghost" type="button">下載牌譜</button>
-          <button id="resultCopyReview" class="ghost" type="button">複製檢討</button>
           <button id="resultNewDeal" class="ghost" type="button">再玩一副</button>
           <button id="resultClose" class="primary" type="button">繼續</button>
         </div>
@@ -736,16 +568,6 @@
         <h2>牌局回放</h2>
         <p id="replaySummary" class="hint"></p>
         <div class="button-row replay-actions"><button id="btnShareReplay" class="ghost" type="button">分享回放摘要</button><button id="btnCopyHandRecordReplay" class="ghost" type="button">複製完整牌譜</button></div>
-        <div class="replay-step-controls">
-          <button id="btnReplayPrevTrick" class="ghost" type="button">上一墩</button>
-          <button id="btnReplayPrev" class="ghost" type="button">上一步</button>
-          <select id="replayStepSelect" aria-label="回放步驟"></select>
-          <button id="btnReplayNext" class="ghost" type="button">下一步</button>
-          <button id="btnReplayNextTrick" class="ghost" type="button">下一墩</button>
-          <label class="mini-field replay-speed-field"><span>速度</span><select id="replaySpeed"><option value="500">0.5 秒</option><option value="900" selected>0.9 秒</option><option value="1500">1.5 秒</option><option value="2500">2.5 秒</option></select></label>
-          <button id="btnReplayPlay" class="primary" type="button">自動播放</button>
-        </div>
-        <div id="replayStepView" class="replay-step-view"></div>
         <div id="replayList" class="replay-list"></div>
       </div>
     </dialog>
