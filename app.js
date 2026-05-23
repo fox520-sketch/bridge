@@ -1,4 +1,4 @@
-const BUILD = "bridge-v1.0.24-debug-bidding-replay-stats-mobile";
+const BUILD = "bridge-v1.0.24.1-boot-guard";
 const ROOM_SCHEMA_VERSION = 66;
 const SEATS = [
   { id: 0, key: "N", name: "北", team: "NS" },
@@ -99,50 +99,74 @@ const appState = {
   debugEvents: []
 };
 
-function init() {
-  appState.clientId = ensureClientId();
-  appState.localUid = `local-${appState.clientId}`;
-  appState.uid = appState.localUid;
-  applyTheme(loadSetting(STORAGE.theme, "auto"));
-  watchSystemTheme();
-  $("playerName").value = localStorage.getItem(STORAGE.name) || randomGuestName();
-  $("themeSelect").value = loadSetting(STORAGE.theme, "auto");
-  setCheckbox("hintToggle", getBool(STORAGE.hints, true));
-  setCheckbox("soundToggle", getBool(STORAGE.sound, false));
-  setCheckbox("vibrationToggle", getBool(STORAGE.vibration, false));
-  setCheckbox("touchComfortToggle", getBool(STORAGE.touch, false));
-  applyMobileSafetyDefaults();
-  setCheckbox("confirmPlayToggle", getBool(STORAGE.confirmPlay, false));
-  const offlineBidding = $("offlineBiddingSystem");
-  if (offlineBidding) offlineBidding.value = loadSetting(STORAGE.biddingSystem, "beginner");
-  const handSortSelect = $("handSortMode");
-  if (handSortSelect) handSortSelect.value = loadSetting(STORAGE.handSortMode, "suit");
-  $("soundProfile").value = loadSetting(STORAGE.soundProfile, "soft");
-  applyPlayerHintsVisible(getBool(STORAGE.hints, true));
-  applyTouchComfort();
-  applyPlayConfirmMode();
-  applyLogVisibility(getBool(STORAGE.logVisible, false));
-
-  const roomFromUrl = getInviteRoomFromLocation();
-  if (roomFromUrl) {
-    appState.pendingInviteRoom = roomFromUrl;
-    $("roomCode").value = roomFromUrl;
-    $("connectStatus").textContent = `偵測到邀請房號 ${roomFromUrl}，正在自動連線並加入…`;
-  } else {
-    const last = localStorage.getItem(STORAGE.lastRoom);
-    const at = Number(localStorage.getItem(STORAGE.lastRoomAt) || 0);
-    if (last && Date.now() - at < 1000 * 60 * 60 * 12) $("roomCode").placeholder = `上次房號 ${last}`;
+function initStep(label, fn) {
+  try { return fn(); }
+  catch (error) {
+    console.error(`初始化步驟失敗：${label}`, error);
+    const footer = $("versionFooter");
+    if (footer && !footer.textContent) footer.textContent = `合約橋牌 ${BUILD}｜初始化警告：${label}`;
+    const status = $("diagnosticOutput");
+    if (status) status.textContent = `初始化警告：${label}
+${error?.message || error}`;
+    return null;
   }
+}
 
-  bindEvents();
-  if (appState.pendingInviteRoom) setTimeout(autoJoinInviteRoom, 250);
-  startUiTicker();
-  renderLocalStatsSummary();
-  renderReleaseChecklist();
-  appState.testViewSeat = loadTestViewSeat();
-  appState.debugEvents = loadDebugEvents();
-  $("versionFooter").textContent = `合約橋牌 ${BUILD}｜標準夢家／閉手變體｜Firebase 多人房間`;
-  showOnboardingIfFirstVisit();
+function init() {
+  initStep("版本資訊", () => {
+    const footer = $("versionFooter");
+    if (footer) footer.textContent = `合約橋牌 ${BUILD}｜標準夢家／閉手變體｜Firebase 多人房間`;
+  });
+  initStep("玩家識別", () => {
+    appState.clientId = ensureClientId();
+    appState.localUid = `local-${appState.clientId}`;
+    appState.uid = appState.localUid;
+  });
+  initStep("偏好設定", () => {
+    applyTheme(loadSetting(STORAGE.theme, "auto"));
+    watchSystemTheme();
+    $("playerName").value = localStorage.getItem(STORAGE.name) || randomGuestName();
+    $("themeSelect").value = loadSetting(STORAGE.theme, "auto");
+    setCheckbox("hintToggle", getBool(STORAGE.hints, true));
+    setCheckbox("soundToggle", getBool(STORAGE.sound, false));
+    setCheckbox("vibrationToggle", getBool(STORAGE.vibration, false));
+    setCheckbox("touchComfortToggle", getBool(STORAGE.touch, false));
+    applyMobileSafetyDefaults();
+    setCheckbox("confirmPlayToggle", getBool(STORAGE.confirmPlay, false));
+    const offlineBidding = $("offlineBiddingSystem");
+    if (offlineBidding) offlineBidding.value = loadSetting(STORAGE.biddingSystem, "beginner");
+    const handSortSelect = $("handSortMode");
+    if (handSortSelect) handSortSelect.value = loadSetting(STORAGE.handSortMode, "suit");
+    $("soundProfile").value = loadSetting(STORAGE.soundProfile, "soft");
+    applyPlayerHintsVisible(getBool(STORAGE.hints, true));
+    applyTouchComfort();
+    applyPlayConfirmMode();
+    applyLogVisibility(getBool(STORAGE.logVisible, false));
+  });
+  initStep("邀請房號", () => {
+    const roomFromUrl = getInviteRoomFromLocation();
+    if (roomFromUrl) {
+      appState.pendingInviteRoom = roomFromUrl;
+      $("roomCode").value = roomFromUrl;
+      $("connectStatus").textContent = `偵測到邀請房號 ${roomFromUrl}，正在自動連線並加入…`;
+    } else {
+      const last = localStorage.getItem(STORAGE.lastRoom);
+      const at = Number(localStorage.getItem(STORAGE.lastRoomAt) || 0);
+      if (last && Date.now() - at < 1000 * 60 * 60 * 12) $("roomCode").placeholder = `上次房號 ${last}`;
+    }
+  });
+  initStep("按鈕事件", bindEvents);
+  initStep("背景更新", () => {
+    if (appState.pendingInviteRoom) setTimeout(autoJoinInviteRoom, 250);
+    startUiTicker();
+  });
+  initStep("本機資料", () => {
+    appState.testViewSeat = loadTestViewSeat();
+    appState.debugEvents = loadDebugEvents();
+    renderLocalStatsSummary();
+    renderReleaseChecklist();
+  });
+  initStep("新手導覽", showOnboardingIfFirstVisit);
 }
 
 function bindEvents() {
@@ -4265,7 +4289,7 @@ async function clearPwaCachesAndReload() {
   setTimeout(() => location.reload(), 800);
 }
 function registerServiceWorker() {
-  if (!("serviceWorker" in navigator)) return;
+  if (!("serviceWorker" in navigator) || !navigator.serviceWorker || typeof navigator.serviceWorker.addEventListener !== "function" || typeof navigator.serviceWorker.register !== "function") return;
   let refreshing = false;
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (refreshing) return;
@@ -4288,5 +4312,9 @@ function registerServiceWorker() {
 function showUpdateBanner(worker) { appState.updateWorker = worker; $("updateBanner").classList.remove("hidden"); }
 function reloadForUpdate() { if (appState.updateWorker) appState.updateWorker.postMessage({ type: "SKIP_WAITING" }); else location.reload(); }
 
-registerServiceWorker();
-init();
+try { registerServiceWorker(); } catch (error) { console.warn("Service worker boot skipped", error); }
+try { init(); } catch (error) {
+  console.error("App boot failed", error);
+  const footer = document.getElementById("versionFooter");
+  if (footer) footer.textContent = `合約橋牌 ${BUILD}｜啟動失敗，請清除快取後重新整理`;
+}
