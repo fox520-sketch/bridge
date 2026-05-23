@@ -8,9 +8,9 @@
   <meta name="theme-color" content="#087ea4" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="合約橋牌" />
-  <link rel="manifest" href="manifest.webmanifest?v=1.0.24.3" />
+  <link rel="manifest" href="manifest.webmanifest?v=1.0.24.4" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="style.css?v=1.0.24.3" />
+  <link rel="stylesheet" href="style.css?v=1.0.24.4" />
 </head>
 <body>
   <div id="app">
@@ -64,7 +64,7 @@
           <div>
             <p class="eyebrow">Quick Start</p>
             <h3>快速開始</h3>
-            <p class="hint compact">不知道怎麼選？新手先用標準夢家模式；想玩你提出的變體，就選「閉手四人」。</p>
+            <p class="hint compact">不知道怎麼選？目前預設使用「閉手四人變體」；想玩正式合約橋牌流程，可改選標準夢家模式。</p>
           </div>
           <button id="btnOpenReleaseNotes" class="ghost" type="button">本版更新</button>
           <button id="btnOpenReleaseChecklist" class="ghost" type="button">正式版測試</button>
@@ -74,7 +74,7 @@
         <div class="quick-mode-grid">
           <button id="btnQuickBeginner" class="quick-mode" type="button">
             <b>新手直接玩</b>
-            <span>開啟玩家提示，標準夢家模式，立即離線開局。</span>
+            <span>開啟玩家提示，變體模式：四手暗牌，立即離線開局。</span>
           </button>
           <button id="btnQuickStandard" class="quick-mode" type="button">
             <b>標準單人局</b>
@@ -134,8 +134,8 @@
           <label class="mini-field">
             <span>遊戲模式</span>
             <select id="offlineMode">
-              <option value="standard" selected>標準模式：夢家亮牌</option>
-              <option value="closed">變體模式：四手暗牌</option>
+              <option value="closed" selected>變體模式：四手暗牌</option>
+              <option value="standard">標準模式：夢家亮牌</option>
             </select>
           </label>
           <label class="mini-field">
@@ -316,8 +316,8 @@
             <label class="field">
               <span>遊戲模式</span>
               <select id="lobbyMode">
-                <option value="standard" selected>標準模式：首攻後夢家亮牌，莊家指揮夢家</option>
-                <option value="closed">變體模式：取消夢家，四手暗牌各自出牌</option>
+                <option value="closed" selected>變體模式：取消夢家，四手暗牌各自出牌</option>
+                <option value="standard">標準模式：首攻後夢家亮牌，莊家指揮夢家</option>
               </select>
               <small>變體模式不是正式合約橋牌；它保留叫牌與計分，但同伴不亮牌、不由莊家控制。</small>
             </label>
@@ -722,6 +722,6 @@
     <footer id="versionFooter" class="version-footer"></footer>
     <div id="toast" class="toast hidden"></div>
   </div>
-  <script type="module" src="app.js?v=1.0.24.3"></script>
+  <script type="module" src="app.js?v=1.0.24.4"></script>
 </body>
 </html>

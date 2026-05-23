@@ -1,10 +1,10 @@
-const CACHE_NAME = "contract-bridge-v1-0-24-3-start-fallback-v23";
+const CACHE_NAME = "contract-bridge-v1-0-24-4-default-closed-mode";
 const ASSETS = [
   "./",
-  "./index.html",
-  "./style.css",
-  "./app.js",
-  "./manifest.webmanifest",
+  "./index.html?v=1.0.24.4",
+  "./style.css?v=1.0.24.4",
+  "./app.js?v=1.0.24.4",
+  "./manifest.webmanifest?v=1.0.24.4",
   "./icons/icon-192.png",
   "./icons/icon-512.png"
 ];

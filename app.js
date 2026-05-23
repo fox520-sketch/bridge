@@ -1,4 +1,4 @@
-const BUILD = "bridge-v1.0.24.3-start-fallback-v23";
+const BUILD = "bridge-v1.0.24.4-default-closed-mode";
 const ROOM_SCHEMA_VERSION = 65;
 const SEATS = [
   { id: 0, key: "N", name: "北", team: "NS" },
@@ -133,13 +133,13 @@ function init() {
   renderLocalStatsSummary();
   renderReleaseChecklist();
   appState.testViewSeat = loadTestViewSeat();
-  $("versionFooter").textContent = `合約橋牌 ${BUILD}｜標準夢家／閉手變體｜Firebase 多人房間`;
+  $("versionFooter").textContent = `合約橋牌 ${BUILD}｜預設閉手變體｜Firebase 多人房間`;
   showOnboardingIfFirstVisit();
 }
 
 function bindEvents() {
   $("btnStartOffline").addEventListener("click", startOfflineGame);
-  $("btnQuickBeginner").addEventListener("click", () => { setPlayerHintsVisible(true); $("offlineMode").value = "standard"; startOfflineGame(); });
+  $("btnQuickBeginner").addEventListener("click", () => { setPlayerHintsVisible(true); $("offlineMode").value = "closed"; startOfflineGame(); });
   $("btnQuickStandard").addEventListener("click", () => { $("offlineMode").value = "standard"; startOfflineGame(); });
   $("btnQuickClosed").addEventListener("click", () => { $("offlineMode").value = "closed"; startOfflineGame(); });
   $("btnQuickMultiplayer").addEventListener("click", () => $("roomCode").scrollIntoView({ behavior: "smooth", block: "center" }));
@@ -958,7 +958,7 @@ async function markOwnSeatOffline() {
 function defaultSettingsFromUI(scope = "offline") {
   if (scope === "lobby") {
     return {
-      mode: $("lobbyMode")?.value || "standard",
+      mode: $("lobbyMode")?.value || "closed",
       vulnerability: $("lobbyVulnerability")?.value || "cycle",
       difficulty: Number($("difficulty")?.value || 10),
       showAiThoughts: Boolean($("showAiThoughts")?.checked ?? true),
@@ -969,7 +969,7 @@ function defaultSettingsFromUI(scope = "offline") {
     };
   }
   return {
-    mode: $("offlineMode")?.value || "standard",
+    mode: $("offlineMode")?.value || "closed",
     vulnerability: $("offlineVulnerability")?.value || "cycle",
     difficulty: Number($("offlineDifficulty")?.value || 10),
     showAiThoughts: true,
@@ -2383,7 +2383,7 @@ function renderLobby(room) {
   }
   seats.querySelectorAll("[data-lock-seat]").forEach((btn) => btn.addEventListener("click", () => hostToggleSeatLock(btn.dataset.lockSeat)));
   seats.querySelectorAll("[data-clear-seat]").forEach((btn) => btn.addEventListener("click", () => hostClearSeat(btn.dataset.clearSeat)));
-  $("lobbyMode").value = room.lobby.settings.mode || "standard";
+  $("lobbyMode").value = room.lobby.settings.mode || "closed";
   $("lobbyVulnerability").value = room.lobby.settings.vulnerability || "cycle";
   $("difficulty").value = room.lobby.settings.difficulty || 10;
   $("difficultyLabel").textContent = $("difficulty").value;
