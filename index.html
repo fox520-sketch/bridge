@@ -171,7 +171,10 @@
             <span>計分模式</span>
             <select id="offlineScoringMode">
               <option value="single" selected>單副練習</option>
-              <option value="chicago4">Chicago 四副制</option>
+              <option value="chicago4">Chicago 4 副制</option>
+                <option value="chicago8">Chicago 8 副制</option>
+                <option value="chicago12">Chicago 12 副制</option>
+                <option value="chicago16">Chicago 16 副制</option>
             </select>
           </label>
           <button id="btnStartOffline" class="primary" type="button">單人離線開始</button>
@@ -331,9 +334,12 @@
               <span>計分模式</span>
               <select id="lobbyScoringMode">
                 <option value="single" selected>單副練習</option>
-                <option value="chicago4">Chicago 四副制｜4 副總分</option>
+                <option value="chicago4">Chicago 4 副制｜4 副總分</option>
+                <option value="chicago8">Chicago 8 副制｜8 副總分</option>
+                <option value="chicago12">Chicago 12 副制｜12 副總分</option>
+                <option value="chicago16">Chicago 16 副制｜16 副總分</option>
               </select>
-              <small>Chicago 會連續記錄四副總分，身價依四副循環。</small>
+              <small>Chicago 可選 4 / 8 / 12 / 16 副，身價依四副循環，結束後產生賽後報告。</small>
             </label>
             <label class="check"><input id="showAiThoughts" type="checkbox" checked /> 顯示 AI 思路紀錄</label>
             <label class="check"><input id="allowSpectators" type="checkbox" checked /> 開放觀戰加入</label>
@@ -530,7 +536,12 @@
         <p class="eyebrow">Release</p>
         <h2>本版更新</h2>
         <ul>
-          <li>新增多人同步 / action queue 測試面板，能看到 pending / processing / rejected / processed 狀態。</li>
+          <li>v1.0.22：Firebase rules 正式強化，私人手牌、action queue 與房主/仲裁者權限分流更清楚。</li>
+          <li>房主 / 仲裁者轉移再強化：房主離線超過安全等待時間後，新仲裁者用交易式寫入接手，降低雙房主風險。</li>
+          <li>Chicago 可選 4 / 8 / 12 / 16 副，賽後報告會列出每副合約、結果、分數與累計分。</li>
+          <li>新增新手教學任務第二章：合約與成局，練習看懂目標墩數、王牌/無王、成局與計分。</li>
+          <li>手機橫向與底部安全區細修，手牌、操作列與紀錄抽屜更避開瀏覽器工具列。</li>
+          <li class="old-note">v1.0.21：新增多人同步 / action queue 測試面板，能看到 pending / processing / rejected / processed 狀態。</li>
           <li>新增卡住自動偵測與房主一鍵修復，可處理 stale action、AI 逾時與清桌逾時。</li>
           <li>出牌 AI 升級第二版：加入首攻、無王長門、有王抽王、第三家高、低張墊牌等基礎策略。</li>
           <li>觀戰模式正式化：房主可開關觀戰，觀戰者只看公開資訊，結束後才看四手全牌。</li>
@@ -571,6 +582,7 @@
           <article><h3>標準夢家模式</h3><p>莊家左手首攻。首攻翻開後，夢家攤牌，夢家的牌由莊家指揮。夢家本人不能自行建議或出牌。</p></article>
           <article><h3>閉手變體模式</h3><p>取消夢家。首攻後同伴牌仍不公開，四個真人或電腦都自行決定自己的出牌。叫牌與計分仍沿用合約橋牌。</p></article>
           <article><h3>計分</h3><p>低花每線位墩 20，高花 30，NT 第一墩 40 後續 30。基本分達 100 是成局；滿貫與身價會增加獎分或罰分。</p></article>
+          <article><h3>新手任務第二章</h3><p>牌局右側「檢討」分頁會帶你練習合約目標、王牌 / 無王、成局線與結算得分。</p></article>
         </div>
         <div class="button-row dialog-actions">
           <button id="btnTutorialEnableHints" class="primary" type="button">開啟玩家提示</button>

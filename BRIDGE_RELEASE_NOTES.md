@@ -1,12 +1,21 @@
-# v1.0.21 更新重點
+# v1.0.22 更新重點
 
-- 新增多人同步 / action queue 測試面板，可查看 pending、processing、audit、processed action 狀態。
-- 新增卡住自動偵測與房主一鍵修復，可處理 stale action、AI 逾時、清桌逾時與 currentPlayer 異常。
-- 出牌 AI 第二版：加入無王長門首攻、基本連張首攻、有王合約抽王、同伴贏時低張墊牌與最小贏張策略。
-- 觀戰模式正式化：房主可開關觀戰；觀戰者只看公開資訊，未公開手牌不會提供到觀戰 UI。
-- 新手教學任務第一章：跟牌與一墩，依牌局進度自動顯示任務完成度。
+- Firebase rules 正式強化：`database.rules.json` 已改成正式防作弊部署取向，分流公開房間資料、每席私人手牌、action queue、撤銷快照與房主 / 仲裁者權限。
+- 房主 / 仲裁者轉移再強化：房主離線需超過安全等待時間才會交易式轉移，並寫入 hostTransferLog，降低短暫網路抖動造成雙房主風險。
+- Chicago 賽制可選 4 / 8 / 12 / 16 副，分數區與賽後報告會列出每副合約、結果、分數、累計分、勝方與分差。
+- 新手教學任務第二章：合約與成局，練習合約目標、王牌 / 無王、成局線與最後計分。
+- 手機橫向與底部安全區細修：橫向模式重新配置左右區塊，並避開 iOS / Android 底部工具列。
 
 # 合約橋牌版本紀錄
+
+## v1.0.22-rules-arbiter-chicago-tutorial-mobile
+
+- Firebase rules 正式強化，主規則檔改為座位私人手牌、action 提交、房主 / 仲裁者處理、roomUndo 快照的正式權限範例。
+- 房主 / 仲裁者轉移再強化：原房主離線需超過安全等待時間才由下一位在線真人以 transaction 接手，並寫入 `meta.hostTransferLog`。
+- Chicago 計分模式可選 4 / 8 / 12 / 16 副，身價依四副循環，賽後總結列出每副合約、結果、分數與累計分。
+- 新增新手教學任務第二章：合約與成局。
+- 手機橫向模式與底部安全區細修，降低手牌、結果視窗與紀錄抽屜被瀏覽器工具列遮住的機率。
+- Service Worker 快取版本更新為 `contract-bridge-v1-0-22-rules-arbiter-chicago-tutorial-mobile`。
 
 ## v1.0.20-host-failover-chicago-mobile-diagnostics
 - 新增房主離線自動轉移，仍在線的真人座位可接任房主 / 仲裁者，讓 action queue 不會因原房主離線而卡住。

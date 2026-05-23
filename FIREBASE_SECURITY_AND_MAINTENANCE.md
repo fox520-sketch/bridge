@@ -1,10 +1,10 @@
-# v1.0.21 更新重點
+# v1.0.22 更新重點
 
-- 新增多人同步 / action queue 測試面板，可查看 pending、processing、audit、processed action 狀態。
-- 新增卡住自動偵測與房主一鍵修復，可處理 stale action、AI 逾時、清桌逾時與 currentPlayer 異常。
-- 出牌 AI 第二版：加入無王長門首攻、基本連張首攻、有王合約抽王、同伴贏時低張墊牌與最小贏張策略。
-- 觀戰模式正式化：房主可開關觀戰；觀戰者只看公開資訊，未公開手牌不會提供到觀戰 UI。
-- 新手教學任務第一章：跟牌與一墩，依牌局進度自動顯示任務完成度。
+- Firebase rules 正式強化：`database.rules.json` 已改成正式防作弊部署取向，分流公開房間資料、每席私人手牌、action queue、撤銷快照與房主 / 仲裁者權限。
+- 房主 / 仲裁者轉移再強化：房主離線需超過安全等待時間才會交易式轉移，並寫入 hostTransferLog，降低短暫網路抖動造成雙房主風險。
+- Chicago 賽制可選 4 / 8 / 12 / 16 副，分數區與賽後報告會列出每副合約、結果、分數、累計分、勝方與分差。
+- 新手教學任務第二章：合約與成局，練習合約目標、王牌 / 無王、成局線與最後計分。
+- 手機橫向與底部安全區細修：橫向模式重新配置左右區塊，並避開 iOS / Android 底部工具列。
 
 # Firebase 安全與維護
 
@@ -40,3 +40,10 @@
 - 房主轉移會寫入 `meta.hostTransferredAt` 與 `meta.hostTransferReason`。
 - 錯誤回報 JSON 會包含 Firebase 診斷：目前是否為房主、房主座位是否在線、待處理 actions 數量、拒絕動作數、房間 schema 與版本。
 - 若要使用 `database.rules.secure.example.json`，請確認 rules 允許房主 claim / remove `actions/{id}`，也允許新房主在原房主離線時更新 `meta.hostUid`。
+
+## v1.0.22 正式強化 rules 部署提醒
+
+- 本版 `database.rules.json` 已等同正式強化版，部署前請先在測試資料庫測試建立房間、加入房間、叫牌、出牌、房主撤銷與重連。
+- 若升級後出現「私人手牌同步失敗」，通常是 Firebase rules 尚未更新，或玩家匿名登入 UID 與座位 UID 不一致；請先複製錯誤回報 JSON 檢查 `firebase` 與 `seats` 欄位。
+- 房主 / 仲裁者轉移不會因短暫抖動立刻發生；原房主離線超過安全等待時間後，下一位在線真人才會嘗試 transaction 接手。
+- Chicago 8 / 12 / 16 副會重複四副身價循環，請確認房間設定與賽後報告的副數一致。

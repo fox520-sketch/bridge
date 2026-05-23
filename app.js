@@ -1,5 +1,5 @@
-const BUILD = "bridge-v1.0.21-sync-ai-spectator-tutorial";
-const ROOM_SCHEMA_VERSION = 63;
+const BUILD = "bridge-v1.0.22-rules-arbiter-chicago-tutorial-mobile";
+const ROOM_SCHEMA_VERSION = 64;
 const SEATS = [
   { id: 0, key: "N", name: "北", team: "NS" },
   { id: 1, key: "E", name: "東", team: "EW" },
@@ -23,6 +23,7 @@ const PRESENCE_HEARTBEAT_MS = 10000;
 const PRESENCE_OFFLINE_MS = 25000;
 const ACTION_STUCK_MS = 18000;
 const STALE_PROCESSING_MS = 12000;
+const HOST_FAILOVER_GRACE_MS = 35000;
 const STORAGE = {
   name: "bridge.playerName",
   theme: "bridge.theme",
@@ -38,7 +39,9 @@ const STORAGE = {
   lastRoom: "bridge.lastRoom",
   lastRoomAt: "bridge.lastRoomAt",
   clientId: "bridge.clientId",
-  checklist: "bridge.releaseChecklist"
+  checklist: "bridge.releaseChecklist",
+  tutorialChapter1: "bridge.tutorial.chapter1",
+  tutorialChapter2: "bridge.tutorial.chapter2"
 };
 const firebaseConfig = {
   apiKey: "AIzaSyDbOGwdYNY4mFG8Sgy8w_QdJpziWVoNx10",
@@ -84,7 +87,8 @@ const appState = {
   undoSnapshot: null,
   recordsDrawerOpen: false,
   mobileRecordTab: "tools",
-  lastHostTransferAttemptAt: 0
+  lastHostTransferAttemptAt: 0,
+  lastArbiterNoticeKey: null
 };
 
 function init() {
@@ -406,7 +410,7 @@ async function createRoom() {
   appState.spectator = false;
   const now = Date.now();
   const room = {
-    meta: { code, hostUid: appState.uid, status: "lobby", createdAt: now, updatedAt: now, expiresAt: now + 24 * 60 * 60 * 1000, schemaVersion: ROOM_SCHEMA_VERSION, appBuild: BUILD },
+    meta: { code, hostUid: appState.uid, arbiterUid: appState.uid, status: "lobby", createdAt: now, updatedAt: now, expiresAt: now + 24 * 60 * 60 * 1000, schemaVersion: ROOM_SCHEMA_VERSION, appBuild: BUILD },
     lobby: {
       dealer: 2,
       boardNo: 1,
@@ -593,6 +597,8 @@ function normalizeRoom(room) {
   room.lobby.seats ||= {};
   for (let i = 0; i < 4; i++) if (room.lobby.seats[i] === undefined) room.lobby.seats[i] = null;
   room.lobby.settings ||= defaultSettingsFromUI("lobby");
+  room.meta ||= {};
+  room.meta.arbiterUid ||= room.meta.hostUid;
   room.match ||= defaultMatchState(room.lobby.settings);
   if (room.game) room.game = hydrateGameForViewer(room.game, room);
   return room;
@@ -677,16 +683,25 @@ function hydrateGameForViewer(publicGame, room) {
   return normalizeGame(game);
 }
 function defaultMatchState(settings = {}) {
-  return { mode: settings.scoringMode || "single", boards: [], totalScore: { NS: 0, EW: 0 }, setNo: 1, startedAt: Date.now(), updatedAt: Date.now() };
+  const mode = settings.scoringMode || "single";
+  return { mode, targetBoards: chicagoBoardCount(mode), boards: [], totalScore: { NS: 0, EW: 0 }, setNo: 1, startedAt: Date.now(), updatedAt: Date.now(), completedSets: [] };
 }
-function scoreModeLabel(mode) { return mode === "chicago4" ? "Chicago 四副制" : "單副練習"; }
+function chicagoBoardCount(modeOrSettings) {
+  const mode = typeof modeOrSettings === "string" ? modeOrSettings : (modeOrSettings?.scoringMode || modeOrSettings?.mode || "single");
+  const match = String(mode || "").match(/^chicago(\d+)$/);
+  return match ? Math.max(4, Math.min(16, Number(match[1]) || 4)) : 1;
+}
+function isChicagoMode(mode) { return /^chicago\d+$/.test(String(mode || "")); }
+function scoreModeLabel(mode) { return isChicagoMode(mode) ? `Chicago ${chicagoBoardCount(mode)} 副制` : "單副練習"; }
 function prepareMatchForNextGame(room) {
   const settings = room?.lobby?.settings || {};
   let match = structuredCloneCompat(room?.match || defaultMatchState(settings));
   if (match.mode !== (settings.scoringMode || "single")) match = defaultMatchState(settings);
   match.mode = settings.scoringMode || "single";
+  match.targetBoards = chicagoBoardCount(match.mode);
   match.boards ||= [];
   match.totalScore ||= { NS: 0, EW: 0 };
+  match.completedSets ||= [];
   if (room?.game?.phase === "scoring" && room.game.result && !match.boards.some((b) => b.gameId === room.game.id)) {
     match.boards.push({
       no: room.game.boardNo,
@@ -699,26 +714,29 @@ function prepareMatchForNextGame(room) {
     });
     match.totalScore = { NS: Number(room.game.score?.NS || match.totalScore.NS || 0), EW: Number(room.game.score?.EW || match.totalScore.EW || 0) };
   }
-  if (match.mode === "single") { match.boards = []; match.totalScore = { NS: 0, EW: 0 }; }
-  if (match.mode === "chicago4" && match.boards.length >= 4) {
-    const completedBoards = match.boards.slice(-4);
+  if (match.mode === "single") { match.boards = []; match.totalScore = { NS: 0, EW: 0 }; match.completedSets = []; match.targetBoards = 1; }
+  const targetBoards = chicagoBoardCount(match.mode);
+  if (isChicagoMode(match.mode) && match.boards.length >= targetBoards) {
+    const completedBoards = match.boards.slice(-targetBoards);
     const finalScore = { NS: Number(match.totalScore?.NS || 0), EW: Number(match.totalScore?.EW || 0) };
     const winner = finalScore.NS === finalScore.EW ? "平手" : finalScore.NS > finalScore.EW ? "南北" : "東西";
     const margin = Math.abs(finalScore.NS - finalScore.EW);
     match = {
-      mode: "chicago4",
+      mode: settings.scoringMode || match.mode,
+      targetBoards,
       boards: [],
       totalScore: { NS: 0, EW: 0 },
       setNo: Number(match.setNo || 1) + 1,
       startedAt: Date.now(),
       updatedAt: Date.now(),
-      lastCompletedSet: { setNo: Number(match.setNo || 1), boards: completedBoards, totalScore: finalScore, winner, margin, completedAt: Date.now() }
+      completedSets: [...listFromFirebase(match.completedSets).slice(-3), { setNo: Number(match.setNo || 1), boards: completedBoards, totalScore: finalScore, winner, margin, completedAt: Date.now(), targetBoards }],
+      lastCompletedSet: { setNo: Number(match.setNo || 1), boards: completedBoards, totalScore: finalScore, winner, margin, completedAt: Date.now(), targetBoards }
     };
   }
   match.updatedAt = Date.now();
   return match;
 }
-function matchHandNumber(match) { return (listFromFirebase(match?.boards).length % 4) + 1; }
+function matchHandNumber(match) { const target = chicagoBoardCount(match?.mode || match); return (listFromFirebase(match?.boards).length % Math.max(1, target)) + 1; }
 
 function normalizeGame(game) {
   game.auction = listFromFirebase(game.auction);
@@ -771,26 +789,40 @@ function eligibleHostSeat(room = appState.room) {
   }
   return null;
 }
+function hostFailoverReady(room, now = Date.now()) {
+  const hSeat = hostSeat(room);
+  const hostPlayer = hSeat == null ? null : room?.lobby?.seats?.[hSeat];
+  if (isSeatOnline(hostPlayer, now)) return { ready: false, reason: "host-online", hostSeat: hSeat };
+  const lastSeen = Number(hostPlayer?.lastSeen || 0);
+  const waited = lastSeen ? now - lastSeen : HOST_FAILOVER_GRACE_MS + 1;
+  if (waited < HOST_FAILOVER_GRACE_MS) return { ready: false, reason: "grace", hostSeat: hSeat, remainingMs: HOST_FAILOVER_GRACE_MS - waited };
+  return { ready: true, reason: hSeat == null ? "host-not-seated" : "host-offline", hostSeat: hSeat };
+}
 async function maybeAutoTransferHost() {
   if (appState.offline || appState.spectator || !appState.connected || !appState.roomCode || !appState.room) return;
-  if (isHost()) return;
+  if (isHostOrArbiter()) return;
   const now = Date.now();
   if (now - appState.lastHostTransferAttemptAt < 6000) return;
-  const host = hostSeat(appState.room);
-  const hostPlayer = host == null ? null : appState.room.lobby?.seats?.[host];
-  if (isSeatOnline(hostPlayer, now)) return;
+  const failover = hostFailoverReady(appState.room, now);
+  if (!failover.ready) return;
   const candidate = eligibleHostSeat(appState.room);
   const mySeat = findSeatByUid(appState.room, appState.uid, appState.clientId);
   if (candidate == null || mySeat !== candidate) return;
   appState.lastHostTransferAttemptAt = now;
   try {
-    await appState.firebase.update(appState.firebase.ref(appState.firebase.db, roomPath()), {
-      "meta/hostUid": appState.uid,
-      "meta/hostTransferredAt": now,
-      "meta/hostTransferReason": host == null ? "host uid not seated" : `host seat ${host} offline`,
-      "meta/updatedAt": now
+    let becameHost = false;
+    const metaRef = appState.firebase.ref(appState.firebase.db, `${roomPath()}/meta`);
+    await appState.firebase.runTransaction(metaRef, (meta) => {
+      if (!meta) return meta;
+      const latestRoom = appState.room;
+      const latestCheck = hostFailoverReady({ ...latestRoom, meta }, Date.now());
+      if (!latestCheck.ready) return;
+      becameHost = true;
+      const history = listFromFirebase(meta.hostTransferLog).slice(-8);
+      history.push({ from: meta.hostUid || null, to: appState.uid, seat: mySeat, at: Date.now(), reason: latestCheck.reason, build: BUILD });
+      return { ...meta, hostUid: appState.uid, arbiterUid: appState.uid, hostTransferredAt: Date.now(), hostTransferReason: latestCheck.reason, hostTransferLog: history, updatedAt: Date.now() };
     });
-    toast("原房主離線，已自動轉移房主給你");
+    if (becameHost) toast("原房主離線超過安全等待時間，已自動轉移房主 / 仲裁者給你");
   } catch (error) {
     console.warn("auto host transfer failed", error);
   }
@@ -956,7 +988,7 @@ function startOfflineGame() {
   appState.roomCode = "OFFLINE";
   appState.uid = appState.localUid;
   appState.room = {
-    meta: { code: "OFFLINE", hostUid: appState.uid, status: "lobby", createdAt: Date.now(), updatedAt: Date.now(), schemaVersion: ROOM_SCHEMA_VERSION, appBuild: BUILD },
+    meta: { code: "OFFLINE", hostUid: appState.uid, arbiterUid: appState.uid, status: "lobby", createdAt: Date.now(), updatedAt: Date.now(), schemaVersion: ROOM_SCHEMA_VERSION, appBuild: BUILD },
     lobby: {
       dealer: 2,
       boardNo: 1,
@@ -1209,6 +1241,8 @@ async function hostCloseRoom() {
   toast("房間已關閉");
 }
 function isHost() { return Boolean(appState.room?.meta?.hostUid && appState.room.meta.hostUid === appState.uid); }
+function isArbiter() { return Boolean(appState.room?.meta?.arbiterUid && appState.room.meta.arbiterUid === appState.uid); }
+function isHostOrArbiter() { return isHost() || isArbiter(); }
 function isMySeat(seat) { return findSeatByUid(appState.room, appState.uid) === Number(seat); }
 
 async function hostStartGame() {
@@ -1275,7 +1309,7 @@ function createNewGame(room) {
     tricksWon: { NS: 0, EW: 0 },
     score: { NS: Number(match.totalScore?.NS || 0), EW: Number(match.totalScore?.EW || 0) },
     matchStartScore: { NS: Number(match.totalScore?.NS || 0), EW: Number(match.totalScore?.EW || 0) },
-    matchInfo: { mode: match.mode || settings.scoringMode || "single", setNo: match.setNo || 1, handNo: matchHandNumber(match), boardsPlayed: listFromFirebase(match.boards).length },
+    matchInfo: { mode: match.mode || settings.scoringMode || "single", setNo: match.setNo || 1, handNo: matchHandNumber(match), boardsPlayed: listFromFirebase(match.boards).length, targetBoards: chicagoBoardCount(match.mode || settings.scoringMode) },
     processedActions: {},
     actionSerial: 0,
     result: null,
@@ -1308,7 +1342,7 @@ function sortHand(hand) {
   return hand;
 }
 function resolveVulnerability(setting, boardNo, settings = {}, match = null) {
-  if (settings?.scoringMode === "chicago4") {
+  if (isChicagoMode(settings?.scoringMode || match?.mode)) {
     const chicago = ["none", "ns", "ew", "both"];
     return chicago[(matchHandNumber(match) - 1) % 4] || "none";
   }
@@ -1343,7 +1377,7 @@ async function submitAction(action) {
   await appState.firebase.push(appState.firebase.ref(appState.firebase.db, actionsPath()), fullAction);
 }
 function maybeProcessActions() {
-  if (appState.offline || !isHost() || appState.processingActions) return;
+  if (appState.offline || !isHostOrArbiter() || appState.processingActions) return;
   const room = appState.room;
   const actionsObj = room?.actions || {};
   const entries = Object.entries(actionsObj).sort((a, b) => (a[1]?.createdAt || 0) - (b[1]?.createdAt || 0));
@@ -2092,10 +2126,12 @@ function renderScore(game) {
   if (game.phase === "scoring" && game.result && !boards.some((b) => b.gameId === game.id)) {
     boards = [...boards, { gameId: game.id, contract: game.contract ? contractText(game.contract, game.declarer) : "Passed out", delta: game.result.scoreDelta || { NS: 0, EW: 0 } }];
   }
-  const chicago = (game.matchInfo?.mode || match.mode) === "chicago4";
+  const mode = game.matchInfo?.mode || match.mode;
+  const chicago = isChicagoMode(mode);
+  const targetBoards = chicagoBoardCount(mode);
   const handNo = game.matchInfo?.handNo || matchHandNumber(match);
-  const boardLine = chicago ? `<div class="score-row"><span>Chicago</span><b>第 ${handNo} / 4 副｜第 ${match.setNo || game.matchInfo?.setNo || 1} 輪</b></div>` : `<div class="score-row"><span>計分模式</span><b>${scoreModeLabel(match.mode)}</b></div>`;
-  const history = boards.length ? `<div class="match-history">${boards.slice(-4).map((b, idx) => `<span>${idx + 1}. ${escapeHtml(b.contract)}｜NS +${b.delta?.NS || 0} EW +${b.delta?.EW || 0}</span>`).join("")}</div>` : "";
+  const boardLine = chicago ? `<div class="score-row"><span>Chicago</span><b>第 ${handNo} / ${targetBoards} 副｜第 ${match.setNo || game.matchInfo?.setNo || 1} 輪</b></div>` : `<div class="score-row"><span>計分模式</span><b>${scoreModeLabel(match.mode)}</b></div>`;
+  const history = boards.length ? `<div class="match-history">${boards.slice(-targetBoards).map((b, idx) => `<span>${idx + 1}. ${escapeHtml(b.contract)}｜NS +${b.delta?.NS || 0} EW +${b.delta?.EW || 0}</span>`).join("")}</div>` : "";
   const chicagoSummary = chicago ? chicagoSummaryHtml(game, match, boards) : "";
   $("scoreList").innerHTML = `
     <div class="score-row"><span>南北 NS 總分</span><b>${game.score?.NS || 0}</b></div>
@@ -2106,15 +2142,16 @@ function renderScore(game) {
   `;
 }
 function chicagoSummaryHtml(game, match, boards) {
-  const currentFourDone = boards.length >= 4 && game.phase === "scoring";
+  const targetBoards = chicagoBoardCount(match?.mode || game?.matchInfo?.mode);
+  const currentFourDone = boards.length >= targetBoards && game.phase === "scoring";
   const completed = match?.lastCompletedSet && !boards.length ? match.lastCompletedSet : null;
   const finalScore = currentFourDone ? { NS: Number(game.score?.NS || 0), EW: Number(game.score?.EW || 0) } : completed?.totalScore;
   if (!finalScore) return "";
   const winner = finalScore.NS === finalScore.EW ? "平手" : finalScore.NS > finalScore.EW ? "南北" : "東西";
   const margin = Math.abs(finalScore.NS - finalScore.EW);
-  const title = currentFourDone ? "本輪 Chicago 已完成" : `上一輪 Chicago 總結`;
-  const rows = (currentFourDone ? boards.slice(-4) : listFromFirebase(completed?.boards)).map((b, idx) => `<li>第 ${idx + 1} 副：${escapeHtml(b.contract || "-")}｜NS +${b.delta?.NS || 0} EW +${b.delta?.EW || 0}</li>`).join("");
-  return `<div class="chicago-summary"><b>${title}</b><p>${winner}${winner === "平手" ? "" : ` 勝 ${margin} 分`}｜NS ${finalScore.NS}：EW ${finalScore.EW}</p><ol>${rows}</ol></div>`;
+  const title = currentFourDone ? `本輪 Chicago ${targetBoards} 副已完成` : `上一輪 Chicago 總結`;
+  const rows = (currentFourDone ? boards.slice(-targetBoards) : listFromFirebase(completed?.boards)).map((b, idx) => `<li>第 ${idx + 1} 副：${escapeHtml(b.contract || "-")}｜${escapeHtml(b.result || "")}｜NS +${b.delta?.NS || 0} EW +${b.delta?.EW || 0}｜累計 NS ${b.totalAfter?.NS ?? "?"}：EW ${b.totalAfter?.EW ?? "?"}</li>`).join("");
+  return `<div class="chicago-summary"><b>${title}</b><p>${winner}${winner === "平手" ? "" : ` 勝 ${margin} 分`}｜NS ${finalScore.NS}：EW ${finalScore.EW}</p><ol>${rows}</ol><p class="hint compact">賽後報告已保留在 match.lastCompletedSet，可在錯誤快照與牌譜中檢查。</p></div>`;
 }
 function renderDealProgress(game, room) {
   const el = $("dealProgress");
@@ -2364,8 +2401,9 @@ function renderRecords(game) {
 function renderPostHandReview(game, room) {
   const reviewEl = $("postHandReview");
   if (reviewEl) {
-    reviewEl.innerHTML = postHandReviewHtml(game, room) + tutorialMissionChapter1Html(game, room);
+    reviewEl.innerHTML = postHandReviewHtml(game, room) + tutorialMissionChapter1Html(game, room) + tutorialMissionChapter2Html(game, room);
     reviewEl.querySelector("#btnResetTutorialChapter1")?.addEventListener("click", resetTutorialChapter1);
+    reviewEl.querySelector("#btnResetTutorialChapter2")?.addEventListener("click", resetTutorialChapter2);
   }
   const healthEl = $("gameHealthPanel");
   if (healthEl) healthEl.innerHTML = gameHealthHtml(game, room);
@@ -2457,7 +2495,7 @@ function collectSyncDiagnostics(room = appState.room) {
     isHost: isHost(),
     spectator: appState.spectator,
     connection: { connected: appState.connected, offlineMode: appState.offline },
-    firebase: { hostUid: room?.meta?.hostUid ? String(room.meta.hostUid).slice(0, 12) : null, hostSeat: hostSeat(room), hostOnline: hostSeat(room) == null ? false : isSeatOnline(room?.lobby?.seats?.[hostSeat(room)]), updatedAt: room?.meta?.updatedAt || null },
+    firebase: { hostUid: room?.meta?.hostUid ? String(room.meta.hostUid).slice(0, 12) : null, arbiterUid: room?.meta?.arbiterUid ? String(room.meta.arbiterUid).slice(0, 12) : null, hostSeat: hostSeat(room), hostOnline: hostSeat(room) == null ? false : isSeatOnline(room?.lobby?.seats?.[hostSeat(room)]), updatedAt: room?.meta?.updatedAt || null, hostTransferLog: listFromFirebase(room?.meta?.hostTransferLog) },
     game: game ? { id: game.id, phase: game.phase, currentPlayer: game.currentPlayer, updatedAt: game.updatedAt, boardNo: game.boardNo, contract: game.contract, auctionCount: listFromFirebase(game.auction).length, currentTrickCount: listFromFirebase(game.currentTrick).length, trickCount: listFromFirebase(game.trickHistory).length, handCounts: game.handCounts || null } : null,
     actionQueue: actionEntries.map(([id, action]) => ({ id, type: action?.type, seat: action?.seat, actorSeat: action?.actorSeat, status: action?.status || "pending", ageMs: now - Number(action?.createdAt || now), processingAgeMs: action?.processingAt ? now - Number(action.processingAt) : null, clientActionId: action?.clientActionId || null })),
     actionAuditSummary: Object.entries(audit).slice(-20).map(([id, item]) => ({ id, ok: item?.ok, duplicate: Boolean(item?.duplicate), reason: item?.reason || null, at: item?.at || null })),
@@ -2480,6 +2518,7 @@ function syncDiagnosticsHtml(room) {
       <span>房主</span><b>${escapeHtml(host)}${diag.firebase.hostOnline ? " 在線" : " 離線/未知"}</b>
       <span>待處理 actions</span><b>${queue.length}</b>
       <span>已處理指紋</span><b>${diag.processedActions}</b>
+      <span>仲裁者</span><b>${escapeHtml(diag.firebase.arbiterUid || "-")}</b>
       <span>Firebase</span><b>${diag.connection.connected ? "已連線" : diag.connection.offlineMode ? "離線局" : "未連線"}</b>
     </div>
     <table class="record-table compact-sync-table"><thead><tr><th>類型</th><th>狀態</th><th>座位</th><th>等待</th></tr></thead><tbody>${queueRows}</tbody></table>
@@ -2570,7 +2609,7 @@ async function hostRepairStuckGame() {
     patch["meta/updatedAt"] = now;
     await updateRoom(patch);
   }
-  if ((room.actions && Object.keys(room.actions).length) && isHost()) setTimeout(maybeProcessActions, 80);
+  if ((room.actions && Object.keys(room.actions).length) && isHostOrArbiter()) setTimeout(maybeProcessActions, 80);
   toast(changed ? `已嘗試修復：${state.title}` : `目前沒有可自動修復項目：${state.title}`);
 }
 
@@ -2586,7 +2625,7 @@ function gameHealthHtml(game, room) {
 function securityDesignHtml(game, room) {
   const mySeat = findSeatByUid(room, appState.uid, appState.clientId);
   const dummyPublic = Boolean(game?.mode === "standard" && game?.dummyVisible);
-  const secureRuleNote = appState.offline ? "離線局不需 Firebase 規則" : "請部署 database.rules.secure.example.json，讓非房主只能讀自己的 private hand";
+  const secureRuleNote = appState.offline ? "離線局不需 Firebase 規則" : "請部署 v1.0.22 的 database.rules.json / secure example，強制私人手牌只能本人讀、動作只能本人提交、房主/仲裁者才能處理";
   return `
     <h3>防作弊資料拆分設計</h3>
     <ul class="security-list">
@@ -2653,6 +2692,36 @@ function resetTutorialChapter1() {
   localStorage.removeItem(STORAGE.tutorialChapter1);
   renderAll();
   toast("已重置新手教學第一章");
+}
+function tutorialMissionChapter2Html(game, room) {
+  const high = highestBid(game?.auction || []);
+  const hasContract = Boolean(game?.contract);
+  const contractGoal = hasContract ? 6 + Number(game.contract.level || 0) : null;
+  const isGameContract = hasContract && contractBasePoints(game.contract.level, game.contract.suit) >= 100;
+  const sawScore = Boolean(game?.phase === "scoring" && game?.result);
+  const tasks = [
+    { ok: Boolean(high || hasContract), label: "看懂目前最高叫品", help: high ? `目前最高叫品是 ${callText(high)}，同一階數需用更高名目或升階才能蓋過。` : "有人叫出合約名目後，叫牌紀錄表會顯示最高叫品。" },
+    { ok: hasContract, label: "知道合約目標 = 6 + 階數", help: hasContract ? `${contractText(game.contract, game.declarer)} 的目標是 ${contractGoal} 墩。` : "例如 1 階要 7 墩，3NT 要 9 墩，4♥ / 4♠ 要 10 墩。" },
+    { ok: Boolean(hasContract && ["NT", "H", "S", "D", "C"].includes(game.contract.suit)), label: "分辨王牌 / 無王", help: hasContract ? (game.contract.suit === "NT" ? "本副是無王合約，沒有任何花色可以將吃。" : `本副以 ${SUITS[game.contract.suit]?.symbol || ""}${SUITS[game.contract.suit]?.name || ""} 為王牌。`) : "合約名目會決定王牌，NT 代表無王。" },
+    { ok: Boolean(hasContract && (isGameContract || game.contract.level >= 3)), label: "認識成局線", help: hasContract ? (isGameContract ? "這是成局合約，基本分達 100 以上，獎分較高。" : "這是部分合約，基本分未達 100；3NT、4♥、4♠、5♣、5♦ 是常見成局。") : "基本分達 100 以上就是成局。" },
+    { ok: sawScore, label: "看懂結算與得分", help: sawScore ? (game.result?.summary || "本副已結算，可看結果視窗的計分拆解。") : "本副結束後會顯示合約分、獎分、超墩或倒約罰分。" }
+  ];
+  const done = tasks.filter((t) => t.ok).length;
+  if (done >= tasks.length) localStorage.setItem(STORAGE.tutorialChapter2, "done");
+  const savedDone = localStorage.getItem(STORAGE.tutorialChapter2) === "done";
+  return `
+    <div class="tutorial-mission-card ${savedDone ? "done" : ""}">
+      <div class="tutorial-mission-head"><h3>新手教學任務｜第二章：合約與成局</h3><span>${done}/${tasks.length}</span></div>
+      <p class="hint compact">這章練習看懂叫牌結果、合約目標、王牌 / 無王、成局與最後計分。</p>
+      <ol>${tasks.map((task) => `<li class="${task.ok ? "ok" : "todo"}"><b>${task.ok ? "✓" : "○"} ${escapeHtml(task.label)}</b><span>${colorizeSuitsHtml(escapeHtml(task.help))}</span></li>`).join("")}</ol>
+      <button id="btnResetTutorialChapter2" class="ghost tiny" type="button">重置第二章進度</button>
+    </div>
+  `;
+}
+function resetTutorialChapter2() {
+  localStorage.removeItem(STORAGE.tutorialChapter2);
+  renderAll();
+  toast("已重置新手教學第二章");
 }
 
 function currentReviewText(game = currentGame()) {
@@ -2744,14 +2813,21 @@ function renderGameRoomStatus(room) {
 }
 function renderPresenceStatusHtml(room, compact = false) {
   const hSeat = hostSeat(room);
+  const arbiterUid = room?.meta?.arbiterUid || room?.meta?.hostUid;
+  const aSeat = [0, 1, 2, 3].find((seat) => room?.lobby?.seats?.[seat]?.uid === arbiterUid);
+  const failover = hostFailoverReady(room);
   const rows = [0, 1, 2, 3].map((seat) => {
     const player = room?.lobby?.seats?.[seat];
     const state = playerPresenceState(player);
     const mine = player && (player.uid === appState.uid || player.clientId === appState.clientId) ? "・你" : "";
     const hostMark = seat === hSeat ? "・房主" : "";
-    return `<div class="presence-row ${state.className}"><b>${SEATS[seat].key} ${seatName(seat)}</b><span>${escapeHtml(player?.name || "空位")}${mine}${hostMark}</span><em>${state.label}${state.detail ? `｜${state.detail}` : ""}</em></div>`;
+    const arbiterMark = seat === aSeat ? "・仲裁者" : "";
+    return `<div class="presence-row ${state.className}"><b>${SEATS[seat].key} ${seatName(seat)}</b><span>${escapeHtml(player?.name || "空位")}${mine}${hostMark}${arbiterMark}</span><em>${state.label}${state.detail ? `｜${state.detail}` : ""}</em></div>`;
   }).join("");
-  const diag = room?.meta?.hostTransferredAt ? `<span>房主曾自動轉移：${escapeHtml(lastSeenText(room.meta.hostTransferredAt))}</span>` : (compact ? "" : `<span>斷線後重新開啟同一房間連結，會自動恢復原座位。</span>`);
+  const hostText = hSeat == null ? "房主未入座" : `房主 ${SEATS[hSeat].key}${failover.reason === "grace" ? `｜轉移倒數 ${Math.ceil((failover.remainingMs || 0) / 1000)} 秒` : ""}`;
+  const arbiterText = aSeat == null ? "仲裁者未入座" : `仲裁者 ${SEATS[aSeat].key}`;
+  const transferLog = listFromFirebase(room?.meta?.hostTransferLog).slice(-1)[0];
+  const diag = `<span>${escapeHtml(hostText)}｜${escapeHtml(arbiterText)}</span>${transferLog ? `<span>最近轉移：${escapeHtml(lastSeenText(transferLog.at))}</span>` : (compact ? "" : `<span>斷線後重新開啟同一房間連結，會自動恢復原座位。</span>`)}`;
   return `<div class="presence-card-title"><b>房間玩家狀態</b>${diag}</div><div class="presence-list">${rows}</div>`;
 }
 function playerPresenceState(player) {
@@ -3348,6 +3424,9 @@ function firebaseDiagnosticSnapshot() {
     pendingActionCount: Object.keys(room?.actions || {}).length,
     rejectedActionCount: Object.values(room?.actionAudit || {}).filter((x) => x && x.ok === false).length,
     lastHostTransferAt: room?.meta?.hostTransferredAt || null,
+    arbiterUid: room?.meta?.arbiterUid || null,
+    hostTransferLog: listFromFirebase(room?.meta?.hostTransferLog),
+    chicagoTargetBoards: chicagoBoardCount(room?.match?.mode || room?.lobby?.settings?.scoringMode),
     schemaVersion: room?.meta?.schemaVersion || null,
     roomBuild: room?.meta?.appBuild || null
   };

@@ -1,24 +1,22 @@
-# v1.0.21 更新重點
+# v1.0.22 更新重點
 
-- 新增多人同步 / action queue 測試面板，可查看 pending、processing、audit、processed action 狀態。
-- 新增卡住自動偵測與房主一鍵修復，可處理 stale action、AI 逾時、清桌逾時與 currentPlayer 異常。
-- 出牌 AI 第二版：加入無王長門首攻、基本連張首攻、有王合約抽王、同伴贏時低張墊牌與最小贏張策略。
-- 觀戰模式正式化：房主可開關觀戰；觀戰者只看公開資訊，未公開手牌不會提供到觀戰 UI。
-- 新手教學任務第一章：跟牌與一墩，依牌局進度自動顯示任務完成度。
+- Firebase rules 正式強化：`database.rules.json` 已改成正式防作弊部署取向，分流公開房間資料、每席私人手牌、action queue、撤銷快照與房主 / 仲裁者權限。
+- 房主 / 仲裁者轉移再強化：房主離線需超過安全等待時間才會交易式轉移，並寫入 hostTransferLog，降低短暫網路抖動造成雙房主風險。
+- Chicago 賽制可選 4 / 8 / 12 / 16 副，分數區與賽後報告會列出每副合約、結果、分數、累計分、勝方與分差。
+- 新手教學任務第二章：合約與成局，練習合約目標、王牌 / 無王、成局線與最後計分。
+- 手機橫向與底部安全區細修：橫向模式重新配置左右區塊，並避開 iOS / Android 底部工具列。
 
 # 合約橋牌｜標準夢家・閉手變體・Firebase 多人房間
 
 這個版本由原本的「拿破崙與秘書」網頁遊戲改成 4 人合約橋牌。保留原專案的靜態網站部署方式、PWA、Firebase 開房間、QR 邀請、觀戰、電腦補位、分享、統計、備份與維護工具。
 
-## 最新版本 v1.0.20-host-failover-chicago-mobile-diagnostics
+## 最新版本 v1.0.22-rules-arbiter-chicago-tutorial-mobile
 
-- 新增房主離線自動轉移：原房主離線時，系統會把仲裁權轉給仍在線的真人座位，讓 action queue 可繼續被處理。
-- action queue 加入處理鎖與重複防護：每個真人操作會帶 `clientActionId`，房主處理時會記錄 `processedActions`，避免重連或連點造成同一動作重複套用。
-- Chicago 四副制加入完整賽後總結：四副明細、總分、勝方與分差會在分數區顯示。
-- 房主工具新增「撤銷整墩」與「撤銷到叫牌結束」，比只撤銷上一動作更適合處理誤觸。
-- 手機版牌桌重排：手牌固定在底部、桌面縮放更適合手機、叫牌與操作區在小螢幕更容易點。
-- 一鍵錯誤回報新增 JSON 快照下載與 Firebase 診斷資訊，包含房主座位、待處理 actions、被拒動作數、schema 與版本。
-
+- Firebase rules 正式強化：`database.rules.json` / `database.rules.secure.example.json` 都已更新，支援私人手牌、action queue、房主 / 仲裁者與撤銷快照的權限分流。
+- 房主 / 仲裁者轉移再強化：短暫斷線不會立刻轉移；離線超過安全等待時間後，下一位在線真人以 transaction 接手，並留下 hostTransferLog。
+- Chicago 支援 4 / 8 / 12 / 16 副，可顯示每副合約、結果、分數、累計分與整輪勝方。
+- 新手教學任務第二章：合約與成局，帶玩家理解 6 + 階數、王牌 / 無王、部分合約、成局與結算。
+- 手機橫向模式與底部安全區細修，降低手牌、紀錄抽屜、結果視窗被 Safari / Chrome 底部工具列遮住的機率。
 
 ## 遊戲模式
 
@@ -54,7 +52,7 @@
 5. 人數不足時房主可以補電腦。
 6. 房主開始對戰。
 
-> 注意：v1.0.20 延續 v1.0.19 的多人牌局防作弊拆分，並新增房主轉移與 action 防重複處理。多人牌局仍改成 `rooms/{code}/game` 公開狀態 + `roomPrivateHands/{code}/{seat}` 私人手牌。一般玩家部署新版 `database.rules.json` 即可運作；若要加強手牌讀取限制，請改用 `database.rules.secure.example.json`。純前端仍信任房主裝置；競賽級防作弊仍建議 Cloud Functions 或可信伺服器。
+> 注意：v1.0.22 將 `database.rules.json` 調整為正式防作弊部署取向。多人牌局使用 `rooms/{code}/game` 公開狀態 + `roomPrivateHands/{code}/{seat}` 私人手牌；一般玩家只能提交自己的 action、讀自己的私人手牌，房主 / 仲裁者負責驗證與推進。純前端仍信任房主裝置；競賽級防作弊仍建議 Cloud Functions 或可信伺服器。
 
 ## 單人離線
 
