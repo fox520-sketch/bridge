@@ -1,5 +1,5 @@
-const BUILD = "bridge-v1.0.13-pacing-progress-turn-title";
-const ROOM_SCHEMA_VERSION = 56;
+const BUILD = "bridge-v1.0.14-turn-alert-ingame-coach";
+const ROOM_SCHEMA_VERSION = 57;
 const SEATS = [
   { id: 0, key: "N", name: "北", team: "NS" },
   { id: 1, key: "E", name: "東", team: "EW" },
@@ -69,6 +69,7 @@ const appState = {
   audioContext: null,
   lastResultKey: null,
   processingActions: false,
+  lastTurnNoticeKey: null,
   updateWorker: null
 };
 
@@ -148,6 +149,9 @@ function bindEvents() {
   $("lobbyVulnerability").addEventListener("change", hostUpdateSettingsFromLobby);
   $("difficulty").addEventListener("input", () => { $("difficultyLabel").textContent = $("difficulty").value; hostUpdateSettingsFromLobby(); });
   $("lobbyPacing")?.addEventListener("change", hostUpdateSettingsFromLobby);
+  $("gamePacing")?.addEventListener("change", hostUpdatePacingFromGame);
+  $("btnCopyLinkGame")?.addEventListener("click", copyInviteLink);
+  $("btnTurnAlertFocus")?.addEventListener("click", scrollToCurrentAction);
   $("showAiThoughts").addEventListener("change", hostUpdateSettingsFromLobby);
   $("btnToggleLog").addEventListener("click", () => setLogVisible(!getBool(STORAGE.logVisible, false)));
   $("btnOnboarding").addEventListener("click", () => showOnboardingDialog(true));
@@ -612,6 +616,14 @@ async function hostUpdateSettingsFromLobby() {
   if (!room || !isHost()) return;
   const settings = defaultSettingsFromUI("lobby");
   await updateRoom({ "lobby/settings": settings, "meta/updatedAt": Date.now() });
+}
+async function hostUpdatePacingFromGame() {
+  const room = appState.room;
+  if (!room || !(appState.offline || isHost())) return;
+  const ms = sanitizePacingMs($("gamePacing")?.value || getPacingMs(room.lobby?.settings));
+  const settings = { ...(room.lobby?.settings || defaultSettingsFromUI("offline")), pacingMs: ms };
+  await updateRoom({ "lobby/settings": settings, "meta/updatedAt": Date.now() });
+  toast(`遊戲節奏已改為 ${delaySecondsLabel(ms)}`);
 }
 async function updateRoom(patch) {
   if (appState.offline) {
@@ -1292,6 +1304,7 @@ function renderGame(room) {
   renderRecords(game);
   renderGameRoomStatus(room);
   renderDealProgress(game, room);
+  renderTurnAlert(room);
   renderLog(game);
   updateBrowserTitle(game, room);
   renderTips(game, room);
@@ -1380,6 +1393,54 @@ function updateBrowserTitle(game, room) {
   else if (["auction", "openingLead", "play"].includes(game.phase)) prefix = `等待 ${SEATS[game.currentPlayer]?.key || "?"}`;
   document.title = `${prefix}｜合約橋牌`;
 }
+
+function renderTurnAlert(room) {
+  const alert = $("turnAlert");
+  if (!alert) return;
+  const game = room?.game;
+  const mySeat = findSeatByUid(room, appState.uid, appState.clientId);
+  const control = game ? controllableSeatForViewer(game, mySeat) : { canAct: false };
+  const canAct = Boolean(game && control?.canAct && !appState.spectator && ["auction", "openingLead", "play"].includes(game.phase));
+  alert.classList.toggle("hidden", !canAct);
+  if (!canAct) {
+    appState.lastTurnNoticeKey = null;
+    return;
+  }
+  const title = game.phase === "auction" ? "輪到你叫牌" : control.seat === game.dummy ? "輪到你指揮夢家" : "輪到你出牌";
+  const text = game.phase === "auction" ? auctionTurnAlertText(game, mySeat) : playTurnAlertText(game, control.seat);
+  $("turnAlertTitle").textContent = title;
+  $("turnAlertText").innerHTML = colorizeSuitsHtml(text);
+  const key = `${game.id}:${game.phase}:${game.currentPlayer}:${control.seat}:${game.auction?.length || 0}:${game.currentTrick?.length || 0}:${game.trickHistory?.length || 0}`;
+  if (appState.lastTurnNoticeKey !== key) {
+    appState.lastTurnNoticeKey = key;
+    playSfx("turn");
+    vibrate([18, 30, 18]);
+    if (document.visibilityState === "visible") toast(title);
+  }
+}
+function auctionTurnAlertText(game, mySeat) {
+  const high = highestBid(game.auction || []);
+  const legal = legalCalls(game, mySeat);
+  const suggestion = suggestCall(game, mySeat)?.call;
+  const base = high ? `目前最高叫品：${callText(high)} by ${SEATS[high.seat].key}` : "目前尚未有人叫牌";
+  return `${base}。可選 ${legal.length} 個合法叫品；建議：${suggestion ? callText(suggestion) : "Pass"}。`;
+}
+function playTurnAlertText(game, seat) {
+  const legal = legalCardsForSeat(game, seat);
+  const suggestion = suggestPlay(game, seat)?.card;
+  if (!game.currentTrick?.length) return `你是本墩首攻，可出 ${legal.length} 張；建議：${suggestion ? suggestion.label : "無"}。`;
+  const led = game.currentTrick[0].card.suit;
+  const hasLed = (game.hands[seat] || []).some((c) => c.suit === led);
+  return `首引花色：${SUITS[led].symbol}${SUITS[led].name}，${hasLed ? "必須跟牌" : "沒有此花色，可墊牌或將吃"}；建議：${suggestion ? suggestion.label : "無"}。`;
+}
+function scrollToCurrentAction() {
+  const room = appState.room;
+  const game = room?.game;
+  if (!game) return;
+  const target = game.phase === "auction" ? ($("handActionPanel") || $("actionPanel")) : ($("hand") || $("actionPanel"));
+  target?.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
 function renderRecords(game) {
   const auctionEl = $("auctionRecord");
   const trickEl = $("trickRecord");
@@ -1442,6 +1503,8 @@ function renderGameRoomStatus(room) {
   if (!el) return;
   el.classList.toggle("hidden", Boolean(appState.offline));
   if (!appState.offline) el.innerHTML = renderPresenceStatusHtml(room, true);
+  const gamePacing = $("gamePacing");
+  if (gamePacing) gamePacing.value = sanitizePacingMs(room?.lobby?.settings?.pacingMs || AI_ACTION_DELAY_MS);
 }
 function renderPresenceStatusHtml(room, compact = false) {
   const rows = [0, 1, 2, 3].map((seat) => {
@@ -1529,6 +1592,12 @@ function renderHand(room) {
   $("handHint").innerHTML = colorizeSuitsHtml(handHintText(game, seat, canAct));
   $("handCount").textContent = seat == null ? "觀戰" : `${hand.length} 張`;
   renderHandAnalysis(game, seat, canAct);
+  const suggestionEl = $("handSuggestion");
+  if (suggestionEl) {
+    suggestionEl.innerHTML = renderPlayerSuggestion(game, { seat, canAct });
+    suggestionEl.classList.toggle("hidden", !canAct);
+    attachSuggestionActions(suggestionEl, mySeat);
+  }
 
   const inlinePanel = $("handActionPanel");
   if (inlinePanel) {
@@ -1595,6 +1664,63 @@ function renderHandAnalysis(game, seat, canAct) {
   if (legalCount != null) chips.push([`${legalCount} 張`, "合法出牌"]);
   el.innerHTML = chips.map(([value, label]) => `<span class="hand-chip"><b>${colorizeSuitsHtml(value)}</b><small>${escapeHtml(label)}</small></span>`).join("");
 }
+
+function renderPlayerSuggestion(game, control) {
+  if (!control?.canAct) return "";
+  if (game.phase === "auction") {
+    const suggestion = suggestCall(game, control.seat);
+    if (!suggestion?.call) return "";
+    return `<div class="player-suggestion"><b>教練建議：${callTextHtml(suggestion.call)}</b><span>${colorizeSuitsHtml(suggestion.reason)}</span><button class="ghost tiny" type="button" data-suggest-call="${escapeHtml(JSON.stringify(suggestion.call))}">套用建議</button></div>`;
+  }
+  if (["openingLead", "play"].includes(game.phase)) {
+    const suggestion = suggestPlay(game, control.seat);
+    if (!suggestion?.card) return "";
+    return `<div class="player-suggestion"><b>教練建議：${cardTextHtml(suggestion.card)}</b><span>${colorizeSuitsHtml(suggestion.reason)}</span><button class="ghost tiny" type="button" data-suggest-play="${escapeHtml(suggestion.card.id)}" data-seat="${control.seat}">出這張</button></div>`;
+  }
+  return "";
+}
+function attachSuggestionActions(container, mySeat) {
+  container.querySelectorAll("[data-suggest-call]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      try { submitAction({ type: "call", seat: mySeat, call: JSON.parse(btn.dataset.suggestCall) }); }
+      catch { toast("建議叫品資料錯誤"); }
+    });
+  });
+  container.querySelectorAll("[data-suggest-play]").forEach((btn) => {
+    btn.addEventListener("click", () => submitAction({ type: "play", seat: Number(btn.dataset.seat), cardId: btn.dataset.suggestPlay }));
+  });
+}
+function suggestCall(game, seat) {
+  try {
+    const hand = game.hands?.[seat] || [];
+    const call = chooseBotCall(structuredCloneCompat(game), seat, appState.room?.lobby || { settings: { difficulty: 12 } });
+    const hcp = handHcp(hand);
+    const shape = shapeText(hand);
+    const high = highestBid(game.auction || []);
+    const reason = call?.type === "pass"
+      ? `${hcp} HCP，牌型 ${shape}。目前${high ? `已有 ${callText(high)}` : "尚未叫牌"}，保守選擇 Pass。`
+      : `${hcp} HCP，牌型 ${shape}。依目前簡易 AI 牌力評估，優先選 ${callText(call)}。`;
+    return { call, reason };
+  } catch (error) {
+    console.warn("suggestCall failed", error);
+    return null;
+  }
+}
+function suggestPlay(game, seat) {
+  try {
+    const card = chooseBotCard(structuredCloneCompat(game), seat, appState.room?.lobby || { settings: { difficulty: 12 } });
+    if (!card) return null;
+    const legal = legalCardsForSeat(game, seat);
+    const led = game.currentTrick?.[0]?.card?.suit;
+    let reason = !led ? `本墩首攻，從 ${legal.length} 張合法牌中選擇 ${card.label}。` : `首引 ${SUITS[led].symbol}${SUITS[led].name}，從 ${legal.length} 張合法牌中選擇 ${card.label}。`;
+    if (game.currentTrick?.length && wouldCardWin(game.currentTrick, card, game.contract?.suit)) reason += "這張目前可以贏過桌面最大牌。";
+    return { card, reason };
+  } catch (error) {
+    console.warn("suggestPlay failed", error);
+    return null;
+  }
+}
+
 function renderActions(room) {
   const game = room.game;
   const mySeat = findSeatByUid(room, appState.uid);
@@ -1602,11 +1728,19 @@ function renderActions(room) {
   panel.innerHTML = "";
   if (game.phase === "auction") {
     renderAuctionControls(panel, game, mySeat, { compact: false, showTitle: true });
+    const control = controllableSeatForViewer(game, mySeat);
+    const sug = document.createElement("div");
+    sug.innerHTML = renderPlayerSuggestion(game, control);
+    if (sug.innerHTML) { panel.appendChild(sug); attachSuggestionActions(sug, mySeat); }
     return;
   }
   if (["openingLead", "play"].includes(game.phase)) {
     const control = controllableSeatForViewer(game, mySeat);
-    panel.append(actionNote(control.canAct ? "請直接點手牌出牌。" : `等待 ${seatName(game.currentPlayer)} 出牌。`));
+    const note = actionNote(control.canAct ? "請直接點手牌出牌。" : `等待 ${seatName(game.currentPlayer)} 出牌。`);
+    panel.append(note);
+    const sug = document.createElement("div");
+    sug.innerHTML = renderPlayerSuggestion(game, control);
+    if (sug.innerHTML) { panel.appendChild(sug); attachSuggestionActions(sug, mySeat); }
     return;
   }
   if (game.phase === "trickPause") {

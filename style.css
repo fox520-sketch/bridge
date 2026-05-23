@@ -448,3 +448,38 @@ button .suit-symbol.black,
   .deal-progress-card { padding: 10px; }
   .progress-line { font-size: .92rem; }
 }
+
+/* v1.0.14: turn alert, in-game pacing, and coach suggestions */
+.turn-alert {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent), transparent 48%);
+  border-radius: 18px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent), transparent 84%), color-mix(in srgb, var(--ok), transparent 88%));
+  box-shadow: var(--shadow);
+}
+.turn-alert b { display: block; font-size: 1.05rem; }
+.turn-alert span { color: var(--muted); line-height: 1.45; }
+.turn-alert .primary { flex: 0 0 auto; }
+.hand-suggestion { margin: 0 0 12px; }
+.player-suggestion {
+  display: grid;
+  gap: 7px;
+  padding: 11px 12px;
+  border: 1px solid color-mix(in srgb, var(--warn), transparent 58%);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--warn), transparent 90%);
+  line-height: 1.45;
+}
+.player-suggestion b { color: var(--ink); }
+.player-suggestion span { color: var(--muted); }
+.player-suggestion .tiny { justify-self: start; padding: 7px 11px; border-radius: 999px; }
+.game-controls-grid { display: grid; gap: 10px; margin-bottom: 10px; }
+@media (max-width: 760px) {
+  .turn-alert { position: sticky; top: 8px; z-index: 12; align-items: stretch; flex-direction: column; }
+  .turn-alert .primary { width: 100%; }
+}

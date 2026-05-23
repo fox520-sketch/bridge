@@ -1,3 +1,13 @@
+# Bridge Firebase Game Release Notes
+
+## v1.0.14-turn-alert-ingame-coach
+
+- 新增「輪到你」醒目提示列，玩家輪到叫牌或出牌時會收到音效/震動提醒，並可一鍵跳到操作區。
+- 新增教練建議卡：依目前手牌、叫牌與出牌局面提供建議叫品或建議出牌，支援一鍵套用。
+- 房主/單人局可在牌局中調整本局節奏，AI 叫牌、AI 出牌與清桌等待會跟著更新。
+- 牌局中新增複製邀請連結入口，方便中途邀請玩家或觀戰者。
+- 更新 Service Worker 快取版本為 `contract-bridge-v1-0-14-turn-alert-ingame-coach`。
+
 # v1.0.13-pacing-progress-turn-title
 
 - 新增「遊戲節奏」設定，可在單人離線與多人房間選擇 0.8 秒、1.2 秒、2 秒、3 秒或 5 秒。

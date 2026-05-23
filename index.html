@@ -328,6 +328,13 @@
     </section>
 
     <main id="gameView" class="game hidden">
+      <div id="turnAlert" class="turn-alert hidden" role="status" aria-live="polite">
+        <div>
+          <b id="turnAlertTitle">輪到你</b>
+          <span id="turnAlertText">請完成操作。</span>
+        </div>
+        <button id="btnTurnAlertFocus" class="primary" type="button">前往操作</button>
+      </div>
       <aside class="left-panel panel">
         <button id="btnGameExit" class="ghost game-exit" type="button">返回主畫面</button>
         <div class="phase-card">
@@ -349,8 +356,21 @@
         <div id="gameHostTools" class="host-tools host-only hidden">
           <h4>多人維護</h4>
           <p class="hint compact">若真人斷線卡住，房主可讓電腦接手離線座位或關閉房間。</p>
+          <div class="game-controls-grid">
+            <label class="mini-field">
+              <span>本局節奏</span>
+              <select id="gamePacing">
+                <option value="800">0.8 秒｜快速</option>
+                <option value="1200">1.2 秒｜偏快</option>
+                <option value="2000">2 秒｜標準</option>
+                <option value="3000">3 秒｜看清楚</option>
+                <option value="5000">5 秒｜教學慢速</option>
+              </select>
+            </label>
+          </div>
           <div class="button-row">
             <button id="btnTakeOverOfflineGame" class="ghost" type="button">接管離線玩家</button>
+            <button id="btnCopyLinkGame" class="ghost" type="button">複製邀請連結</button>
             <button id="btnCloseRoomGame" class="ghost danger-ghost" type="button">關閉房間</button>
           </div>
         </div>
@@ -383,6 +403,7 @@
             <div id="handCount" class="pill"></div>
           </div>
           <div id="handAnalysis" class="hand-analysis" aria-live="polite"></div>
+          <div id="handSuggestion" class="hand-suggestion hidden" aria-live="polite"></div>
           <div id="handActionPanel" class="inline-actions hidden" aria-live="polite"></div>
           <div id="hand" class="hand"></div>
         </div>
@@ -449,6 +470,9 @@
         <p class="eyebrow">Release</p>
         <h2>本版更新</h2>
         <ul>
+          <li>新增「輪到你」醒目提示列，輪到叫牌或出牌時會音效/震動提醒，並可一鍵跳到操作區。</li>
+          <li>新增教練建議：輪到你時會提示建議叫品或建議出牌，也可一鍵套用。</li>
+          <li>房主可在牌局中調整本局節奏，也能直接複製邀請連結。</li>
           <li>新增可調整「遊戲節奏」：AI 叫牌、AI 出牌與清桌等待可選快速、標準或教學慢速。</li>
           <li>新增牌局「局勢摘要」與瀏覽器標題提示，輪到你操作時更容易注意到。</li>
           <li>全域修正花色顏色：紅心 <span class="suit-symbol red">♥</span>、方塊 <span class="suit-symbol red">♦</span> 會在牌桌、紀錄、提示與結果中顯示紅色。</li>
