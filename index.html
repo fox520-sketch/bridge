@@ -336,6 +336,7 @@
               <small>Chicago 會連續記錄四副總分，身價依四副循環。</small>
             </label>
             <label class="check"><input id="showAiThoughts" type="checkbox" checked /> 顯示 AI 思路紀錄</label>
+            <label class="check"><input id="allowSpectators" type="checkbox" checked /> 開放觀戰加入</label>
           </div>
           <button id="btnStartGame" class="primary big host-only hidden" type="button">開始對戰</button>
           <p id="lobbyNotice" class="hint"></p>
@@ -389,6 +390,7 @@
           <div class="button-row">
             <button id="btnTakeOverCurrentGame" class="ghost" type="button">接管目前輪到者</button>
             <button id="btnForceContinueGame" class="ghost" type="button">立即處理等待</button>
+            <button id="btnRepairStuckGame" class="ghost" type="button">一鍵修復卡住</button>
             <button id="btnUndoLastGame" class="ghost" type="button">撤銷上一動作</button>
             <button id="btnUndoTrickGame" class="ghost" type="button">撤銷整墩</button>
             <button id="btnUndoToPlayStartGame" class="ghost" type="button">撤銷到叫牌結束</button>
@@ -468,6 +470,7 @@
             <button id="btnDownloadErrorSnapshotSide" class="ghost" type="button">下載 JSON 快照</button>
           </div>
         </section>
+        <section id="syncTestPanel" class="record-panel sync-panel" data-record-tab="tools" aria-live="polite"></section>
         <section class="record-panel" data-record-tab="auction">
           <h3>叫牌紀錄表</h3>
           <div id="auctionRecord" class="record-scroll" aria-live="polite"></div>
@@ -527,7 +530,13 @@
         <p class="eyebrow">Release</p>
         <h2>本版更新</h2>
         <ul>
-          <li>多人牌局正式拆分公開狀態與私人手牌，公開房間資料不再保存四家暗牌。</li>
+          <li>新增多人同步 / action queue 測試面板，能看到 pending / processing / rejected / processed 狀態。</li>
+          <li>新增卡住自動偵測與房主一鍵修復，可處理 stale action、AI 逾時與清桌逾時。</li>
+          <li>出牌 AI 升級第二版：加入首攻、無王長門、有王抽王、第三家高、低張墊牌等基礎策略。</li>
+          <li>觀戰模式正式化：房主可開關觀戰，觀戰者只看公開資訊，結束後才看四手全牌。</li>
+          <li>新增新手教學任務第一章：跟牌與一墩，會依牌局進度顯示任務。</li>
+          <li>保留多人防作弊資料拆分、Chicago、進階撤銷、手機專用牌桌與 JSON 診斷。</li>
+          <li class="old-note">v1.0.19：多人牌局正式拆分公開狀態與私人手牌，公開房間資料不再保存四家暗牌。</li>
           <li>新增動作提交 / 房主合法性驗證：真人只送出叫牌或出牌意圖，通過驗證才更新牌局。</li>
           <li>新增 Chicago 四副制與總分表，可選單副練習或四副累計總分。</li>
           <li>房主新增「撤銷上一動作」與「重打本副」，方便處理誤觸與同步問題。</li>

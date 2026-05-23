@@ -1,5 +1,5 @@
-const BUILD = "bridge-v1.0.20-host-failover-chicago-mobile-diagnostics";
-const ROOM_SCHEMA_VERSION = 62;
+const BUILD = "bridge-v1.0.21-sync-ai-spectator-tutorial";
+const ROOM_SCHEMA_VERSION = 63;
 const SEATS = [
   { id: 0, key: "N", name: "北", team: "NS" },
   { id: 1, key: "E", name: "東", team: "EW" },
@@ -21,6 +21,8 @@ const TRICK_CLEAR_DELAY_MS = 2000;
 const PACING_OPTIONS_MS = [800, 1200, 2000, 3000, 5000];
 const PRESENCE_HEARTBEAT_MS = 10000;
 const PRESENCE_OFFLINE_MS = 25000;
+const ACTION_STUCK_MS = 18000;
+const STALE_PROCESSING_MS = 12000;
 const STORAGE = {
   name: "bridge.playerName",
   theme: "bridge.theme",
@@ -169,6 +171,7 @@ function bindEvents() {
   $("difficulty").addEventListener("input", () => { $("difficultyLabel").textContent = $("difficulty").value; hostUpdateSettingsFromLobby(); });
   $("lobbyPacing")?.addEventListener("change", hostUpdateSettingsFromLobby);
   $("lobbyScoringMode")?.addEventListener("change", hostUpdateSettingsFromLobby);
+  $("allowSpectators")?.addEventListener("change", hostUpdateSettingsFromLobby);
   $("gamePacing")?.addEventListener("change", hostUpdatePacingFromGame);
   $("btnCopyLinkGame")?.addEventListener("click", copyInviteLink);
   $("btnUndoLastGame")?.addEventListener("click", hostUndoLastAction);
@@ -179,6 +182,10 @@ function bindEvents() {
   $("btnCopyErrorReportSide")?.addEventListener("click", copyDetailedErrorReport);
   $("btnDownloadErrorSnapshotGame")?.addEventListener("click", downloadErrorSnapshot);
   $("btnDownloadErrorSnapshotSide")?.addEventListener("click", downloadErrorSnapshot);
+  $("btnRepairStuckGame")?.addEventListener("click", hostRepairStuckGame);
+  $("btnCopySyncDiagnostics")?.addEventListener("click", copySyncDiagnosticsReport);
+  $("btnDownloadSyncDiagnostics")?.addEventListener("click", downloadSyncDiagnosticsSnapshot);
+  $("btnResetTutorialChapter1")?.addEventListener("click", resetTutorialChapter1);
   $("btnTurnAlertFocus")?.addEventListener("click", scrollToCurrentAction);
   $("showAiThoughts").addEventListener("change", hostUpdateSettingsFromLobby);
   $("btnToggleLog").addEventListener("click", () => setLogVisible(!getBool(STORAGE.logVisible, false)));
@@ -377,6 +384,7 @@ function renderTemporalHud() {
     renderDealProgress(room.game, room);
     renderTurnWaitCard(room);
     renderGameRoomStatus(room);
+    renderSyncTestPanel(room);
     renderTable(room);
     renderMobileQuickNav(room);
   } catch (error) {
@@ -464,6 +472,10 @@ async function joinRoomByCode(code, spectator = false, fromInvite = false) {
     return toast("找不到房間");
   }
   const room = snap.val();
+  if (spectator && room?.lobby?.settings?.allowSpectators === false) {
+    setStatus(`房間 ${code} 已關閉觀戰加入`);
+    return toast("房主目前不開放觀戰");
+  }
   if (room?.meta?.status === "closed") {
     setStatus(`房間 ${code} 已關閉`);
     return toast("房間已關閉");
@@ -493,6 +505,11 @@ async function joinRoomByCode(code, spectator = false, fromInvite = false) {
     } else if (room?.meta?.status === "lobby") {
       const firstEmpty = firstEmptySeat(room);
       if (firstEmpty == null) {
+        if (room?.lobby?.settings?.allowSpectators === false) {
+          appState.roomCode = null;
+          appState.spectator = false;
+          return toast("座位已滿，且房主未開放觀戰");
+        }
         appState.spectator = true;
         toast("座位已滿，改以觀戰加入");
       } else {
@@ -502,6 +519,11 @@ async function joinRoomByCode(code, spectator = false, fromInvite = false) {
         });
       }
     } else {
+      if (room?.lobby?.settings?.allowSpectators === false) {
+        appState.roomCode = null;
+        appState.spectator = false;
+        return toast("牌局已開始，且房主未開放觀戰");
+      }
       appState.spectator = true;
       toast("牌局已開始，沒有原座位，改以觀戰加入");
     }
@@ -854,7 +876,8 @@ function defaultSettingsFromUI(scope = "offline") {
       difficulty: Number($("difficulty")?.value || 10),
       showAiThoughts: Boolean($("showAiThoughts")?.checked ?? true),
       pacingMs: sanitizePacingMs($("lobbyPacing")?.value || AI_ACTION_DELAY_MS),
-      scoringMode: $("lobbyScoringMode")?.value || "single"
+      scoringMode: $("lobbyScoringMode")?.value || "single",
+      allowSpectators: Boolean($("allowSpectators")?.checked ?? true)
     };
   }
   return {
@@ -863,7 +886,8 @@ function defaultSettingsFromUI(scope = "offline") {
     difficulty: Number($("offlineDifficulty")?.value || 10),
     showAiThoughts: true,
     pacingMs: sanitizePacingMs($("offlinePacing")?.value || AI_ACTION_DELAY_MS),
-    scoringMode: $("offlineScoringMode")?.value || "single"
+    scoringMode: $("offlineScoringMode")?.value || "single",
+    allowSpectators: true
   };
 }
 function sanitizePacingMs(value) {
@@ -1863,17 +1887,90 @@ function chooseBotCard(game, seat, lobby) {
   const legal = legalCardsForSeat(game, seat);
   if (!legal.length) return null;
   const difficulty = Number(lobby?.settings?.difficulty || 10);
+  const trump = game.contract?.suit || "NT";
+  const hand = game.hands?.[seat] || [];
+  const isDeclarerSide = game.contract && teamOf(seat) === teamOf(game.declarer);
+  const isDeclarerController = game.mode === "standard" ? (seat === game.declarer || seat === game.dummy) : isDeclarerSide;
   if (!game.currentTrick.length) {
-    const trump = game.contract?.suit;
+    if (difficulty >= 12 && game.contract && trump !== "NT" && isDeclarerController) {
+      const trumpCards = legal.filter((c) => c.suit === trump);
+      const opponentsTrumpLikely = unseenSuitCount(game, seat, trump) > 0;
+      if (trumpCards.length >= 2 && opponentsTrumpLikely && hasTopTrumpControl(trumpCards)) return highestCard(trumpCards);
+    }
+    if (difficulty >= 10 && game.contract && trump === "NT") {
+      const longSuit = bestLeadSuitForNoTrump(legal);
+      if (longSuit) return leadFromSuit(legal.filter((c) => c.suit === longSuit), difficulty);
+    }
+    if (difficulty >= 12 && game.contract && !isDeclarerSide) {
+      const sequence = honorSequenceLead(legal, trump);
+      if (sequence) return sequence;
+    }
     const nonTrump = legal.filter((c) => trump === "NT" || c.suit !== trump);
     const pool = nonTrump.length ? nonTrump : legal;
-    return difficulty >= 14 ? lowestFromLongest(pool) : lowestCard(pool);
+    return difficulty >= 14 ? leadFromSuit(pool.filter((c) => c.suit === bestLeadSuit(pool, trump)), difficulty) : lowestCard(pool);
   }
-  const currentWinner = trickWinner(game.currentTrick, game.contract?.suit);
-  if (teamOf(currentWinner) === teamOf(seat)) return lowestCard(legal);
-  const winners = legal.filter((card) => wouldCardWin(game.currentTrick, card, game.contract?.suit));
-  if (winners.length) return lowestCard(winners);
-  return lowestCard(legal);
+  const currentWinner = trickWinner(game.currentTrick, trump);
+  const partnerWinning = teamOf(currentWinner) === teamOf(seat);
+  if (partnerWinning) {
+    const discard = safeDiscardCard(legal, trump);
+    return discard || lowestCard(legal);
+  }
+  const winners = legal.filter((card) => wouldCardWin(game.currentTrick, card, trump));
+  if (winners.length) return lowestEffectiveWinner(winners, game.currentTrick, trump);
+  const ledSuit = game.currentTrick[0]?.card?.suit;
+  if (difficulty >= 12 && ledSuit && legal.every((c) => c.suit === ledSuit)) return lowestCard(legal);
+  return safeDiscardCard(legal, trump) || lowestCard(legal);
+}
+function unseenSuitCount(game, seat, suit) {
+  const seen = [];
+  for (const h of game.hands || []) for (const c of h || []) if (c?.suit === suit) seen.push(c.id);
+  for (const p of game.currentTrick || []) if (p.card?.suit === suit) seen.push(p.card.id);
+  for (const t of game.trickHistory || []) for (const p of t.plays || []) if (p.card?.suit === suit) seen.push(p.card.id);
+  return Math.max(0, 13 - new Set(seen).size);
+}
+function hasTopTrumpControl(trumps) { return trumps.some((c) => ["A", "K", "Q"].includes(c.rank)); }
+function bestLeadSuit(cards, trump) {
+  const groups = groupBySuit(cards.filter((c) => trump === "NT" || c.suit !== trump));
+  const entries = Object.entries(groups).filter(([, list]) => list.length);
+  if (!entries.length) return cards[0]?.suit;
+  return entries.sort((a, b) => b[1].length - a[1].length || suitHcp(b[1], b[0]) - suitHcp(a[1], a[0]) || SUITS[b[0]].order - SUITS[a[0]].order)[0][0];
+}
+function bestLeadSuitForNoTrump(cards) {
+  const groups = groupBySuit(cards);
+  const entries = Object.entries(groups).filter(([, list]) => list.length >= 3);
+  if (!entries.length) return bestLeadSuit(cards, "NT");
+  return entries.sort((a, b) => b[1].length - a[1].length || suitHcp(b[1], b[0]) - suitHcp(a[1], a[0]))[0][0];
+}
+function groupBySuit(cards) {
+  return cards.reduce((acc, c) => { (acc[c.suit] ||= []).push(c); return acc; }, { C: [], D: [], H: [], S: [] });
+}
+function leadFromSuit(cards, difficulty = 10) {
+  const sorted = [...cards].sort((a, b) => b.order - a.order);
+  const seq = honorSequenceLead(sorted, "NT");
+  if (seq) return seq;
+  if (difficulty >= 14 && sorted.length >= 4) return sorted[sorted.length - 2] || lowestCard(sorted);
+  return lowestCard(sorted);
+}
+function honorSequenceLead(cards, trump) {
+  const pool = cards.filter((c) => trump === "NT" || c.suit !== trump);
+  const groups = groupBySuit(pool);
+  for (const list of Object.values(groups)) {
+    const ranks = new Set(list.map((c) => c.rank));
+    for (const seq of [["A","K","Q"], ["K","Q","J"], ["Q","J","10"], ["J","10","9"]]) {
+      if (seq.every((r) => ranks.has(r))) return list.find((c) => c.rank === seq[0]);
+    }
+  }
+  return null;
+}
+function lowestEffectiveWinner(winners, currentTrick, trump) {
+  return [...winners].sort((a, b) => a.order - b.order || SUITS[a.suit].order - SUITS[b.suit].order)[0];
+}
+function safeDiscardCard(cards, trump) {
+  const nonTrump = cards.filter((c) => trump === "NT" || c.suit !== trump);
+  const lowNonHonors = nonTrump.filter((c) => !["A", "K", "Q", "J"].includes(c.rank));
+  if (lowNonHonors.length) return lowestCard(lowNonHonors);
+  if (nonTrump.length) return lowestCard(nonTrump);
+  return lowestCard(cards);
 }
 function wouldCardWin(currentTrick, card, trump) {
   const plays = [...currentTrick, { seat: 99, card }];
@@ -1929,6 +2026,7 @@ function renderLobby(room) {
   if ($("lobbyPacing")) $("lobbyPacing").value = sanitizePacingMs(room.lobby.settings.pacingMs || AI_ACTION_DELAY_MS);
   if ($("lobbyScoringMode")) $("lobbyScoringMode").value = room.lobby.settings.scoringMode || "single";
   $("showAiThoughts").checked = Boolean(room.lobby.settings.showAiThoughts ?? true);
+  if ($("allowSpectators")) $("allowSpectators").checked = room.lobby.settings.allowSpectators !== false;
   const filled = [0, 1, 2, 3].filter((s) => room.lobby.seats[s]).length;
   $("lobbyNotice").textContent = isHost() ? `目前 ${filled}/4 位；可補電腦後開始。` : "等待房主開始。";
 }
@@ -1943,6 +2041,7 @@ function renderGame(room) {
   renderRecords(game);
   renderPostHandReview(game, room);
   renderGameRoomStatus(room);
+  renderSyncTestPanel(room);
   renderDealProgress(game, room);
   renderTurnWaitCard(room);
   renderTurnAlert(room);
@@ -2264,7 +2363,10 @@ function renderRecords(game) {
 
 function renderPostHandReview(game, room) {
   const reviewEl = $("postHandReview");
-  if (reviewEl) reviewEl.innerHTML = postHandReviewHtml(game, room);
+  if (reviewEl) {
+    reviewEl.innerHTML = postHandReviewHtml(game, room) + tutorialMissionChapter1Html(game, room);
+    reviewEl.querySelector("#btnResetTutorialChapter1")?.addEventListener("click", resetTutorialChapter1);
+  }
   const healthEl = $("gameHealthPanel");
   if (healthEl) healthEl.innerHTML = gameHealthHtml(game, room);
 }
@@ -2325,6 +2427,153 @@ function contractReviewSummary(game) {
   ];
   return { state, title: `${contract}｜進行中`, subtitle: `${declaringTeam} ${madeNow}/${target} 墩，剩餘 ${remaining} 墩`, badge: alreadyMade ? "已達標" : canStillMake ? `差 ${need}` : "已無法成約", detail };
 }
+
+function renderSyncTestPanel(room) {
+  const el = $("syncTestPanel");
+  if (!el) return;
+  el.innerHTML = syncDiagnosticsHtml(room);
+  el.querySelector("[data-repair-stuck]")?.addEventListener("click", hostRepairStuckGame);
+  el.querySelector("[data-copy-sync]")?.addEventListener("click", copySyncDiagnosticsReport);
+  el.querySelector("[data-download-sync]")?.addEventListener("click", downloadSyncDiagnosticsSnapshot);
+}
+function collectSyncDiagnostics(room = appState.room) {
+  const game = room?.game || null;
+  const actions = room?.actions || {};
+  const actionEntries = Object.entries(actions).sort((a,b)=>(a[1]?.createdAt||0)-(b[1]?.createdAt||0));
+  const audit = room?.actionAudit || {};
+  const now = Date.now();
+  const stale = detectStuckState(room);
+  const seats = [0,1,2,3].map((seat) => {
+    const player = room?.lobby?.seats?.[seat] || null;
+    const state = playerPresenceState(player);
+    return { seat, key: SEATS[seat].key, name: player?.name || null, type: player?.type || null, online: player?.online ?? null, lastSeen: player?.lastSeen || null, state: state.label, detail: state.detail };
+  });
+  return {
+    build: BUILD,
+    schemaVersion: ROOM_SCHEMA_VERSION,
+    exportedAt: new Date(now).toISOString(),
+    roomCode: room?.meta?.code || null,
+    localUid: appState.uid ? String(appState.uid).slice(0, 12) : null,
+    isHost: isHost(),
+    spectator: appState.spectator,
+    connection: { connected: appState.connected, offlineMode: appState.offline },
+    firebase: { hostUid: room?.meta?.hostUid ? String(room.meta.hostUid).slice(0, 12) : null, hostSeat: hostSeat(room), hostOnline: hostSeat(room) == null ? false : isSeatOnline(room?.lobby?.seats?.[hostSeat(room)]), updatedAt: room?.meta?.updatedAt || null },
+    game: game ? { id: game.id, phase: game.phase, currentPlayer: game.currentPlayer, updatedAt: game.updatedAt, boardNo: game.boardNo, contract: game.contract, auctionCount: listFromFirebase(game.auction).length, currentTrickCount: listFromFirebase(game.currentTrick).length, trickCount: listFromFirebase(game.trickHistory).length, handCounts: game.handCounts || null } : null,
+    actionQueue: actionEntries.map(([id, action]) => ({ id, type: action?.type, seat: action?.seat, actorSeat: action?.actorSeat, status: action?.status || "pending", ageMs: now - Number(action?.createdAt || now), processingAgeMs: action?.processingAt ? now - Number(action.processingAt) : null, clientActionId: action?.clientActionId || null })),
+    actionAuditSummary: Object.entries(audit).slice(-20).map(([id, item]) => ({ id, ok: item?.ok, duplicate: Boolean(item?.duplicate), reason: item?.reason || null, at: item?.at || null })),
+    processedActions: Object.keys(game?.processedActions || {}).length,
+    seats,
+    stuck: stale
+  };
+}
+function syncDiagnosticsHtml(room) {
+  const diag = collectSyncDiagnostics(room);
+  const stuck = diag.stuck;
+  const queue = diag.actionQueue;
+  const queueRows = queue.length ? queue.slice(0, 8).map((a) => `<tr><td>${escapeHtml(a.type || "-")}</td><td>${escapeHtml(a.status || "pending")}</td><td>${escapeHtml(String(a.seat ?? "-"))}</td><td>${Math.round(Number(a.ageMs || 0) / 1000)} 秒</td></tr>`).join("") : `<tr><td colspan="4">目前沒有待處理動作。</td></tr>`;
+  const stateClass = stuck.level === "danger" ? "danger" : stuck.level === "warn" ? "warn" : "ok";
+  const host = diag.firebase.hostSeat == null ? "未知" : `${SEATS[diag.firebase.hostSeat].key} ${seatName(diag.firebase.hostSeat)}`;
+  return `
+    <h3>多人同步 / Action Queue 測試</h3>
+    <div class="sync-summary ${stateClass}"><b>${escapeHtml(stuck.title)}</b><span>${escapeHtml(stuck.message)}</span></div>
+    <div class="sync-grid">
+      <span>房主</span><b>${escapeHtml(host)}${diag.firebase.hostOnline ? " 在線" : " 離線/未知"}</b>
+      <span>待處理 actions</span><b>${queue.length}</b>
+      <span>已處理指紋</span><b>${diag.processedActions}</b>
+      <span>Firebase</span><b>${diag.connection.connected ? "已連線" : diag.connection.offlineMode ? "離線局" : "未連線"}</b>
+    </div>
+    <table class="record-table compact-sync-table"><thead><tr><th>類型</th><th>狀態</th><th>座位</th><th>等待</th></tr></thead><tbody>${queueRows}</tbody></table>
+    <div class="button-row compact-actions"><button class="ghost tiny" type="button" data-copy-sync="1">複製診斷</button><button class="ghost tiny" type="button" data-download-sync="1">下載 JSON</button>${(isHost() || appState.offline) ? `<button class="ghost tiny" type="button" data-repair-stuck="1">一鍵修復卡住</button>` : ""}</div>
+  `;
+}
+function detectStuckState(room = appState.room) {
+  const game = room?.game;
+  const now = Date.now();
+  if (!room) return { stuck: false, level: "warn", reason: "no-room", title: "尚未進入房間", message: "目前沒有可診斷的房間。" };
+  if (!game) return { stuck: false, level: "warn", reason: "no-game", title: "尚未開局", message: "房間仍在大廳，尚無牌局狀態。" };
+  const actions = Object.values(room.actions || {});
+  const staleProcessing = actions.find((a) => a?.status === "processing" && now - Number(a.processingAt || 0) > STALE_PROCESSING_MS);
+  if (staleProcessing) return { stuck: true, level: "danger", reason: "stale-processing", title: "Action 可能卡住", message: `有動作 processing 超過 ${Math.round(STALE_PROCESSING_MS/1000)} 秒，可由房主一鍵修復。` };
+  const oldestPending = actions.filter((a) => !a.status || a.status === "pending").sort((a,b)=>(a.createdAt||0)-(b.createdAt||0))[0];
+  if (oldestPending && now - Number(oldestPending.createdAt || now) > ACTION_STUCK_MS) return { stuck: true, level: "danger", reason: "pending-action", title: "Action Queue 等待過久", message: "有玩家動作長時間未被房主處理，可能房主端卡住或已離線。" };
+  if (game.phase === "trickPause" && game.pendingTrick?.clearAt && now - Number(game.pendingTrick.clearAt) > 5000) return { stuck: true, level: "danger", reason: "overdue-clear", title: "清桌逾時", message: "本墩已超過預定清桌時間，房主可以立即修復。" };
+  if (["auction", "openingLead", "play"].includes(game.phase)) {
+    const controller = controllingSeatForCurrentAction(game);
+    const player = room.lobby?.seats?.[controller];
+    if (player?.type === "bot") {
+      const dueAt = Number(game.updatedAt || room.meta?.updatedAt || now) + getAiActionDelayMs(room.lobby?.settings);
+      if (now - dueAt > 7000) return { stuck: true, level: "danger", reason: "bot-overdue", title: "AI 動作逾時", message: "AI 應該已經行動但尚未推進，房主可以一鍵修復。" };
+    }
+    if (!Number.isInteger(game.currentPlayer) || game.currentPlayer < 0 || game.currentPlayer > 3) return { stuck: true, level: "danger", reason: "bad-current-player", title: "輪到者資料異常", message: "currentPlayer 不是有效座位。" };
+    if (player?.type === "human" && isPlayerOffline(player)) return { stuck: false, level: "warn", reason: "offline-human", title: "等待離線真人", message: `${player.name || seatName(controller)} 目前離線，房主可接管目前輪到者。` };
+  }
+  const lag = Math.round((now - Number(game.updatedAt || room.meta?.updatedAt || now)) / 1000);
+  return { stuck: false, level: "ok", reason: "ok", title: "同步看起來正常", message: `牌局狀態約 ${Math.max(0, lag)} 秒前更新。` };
+}
+async function copySyncDiagnosticsReport() {
+  await copyText(JSON.stringify(collectSyncDiagnostics(appState.room), null, 2));
+  toast("已複製多人同步診斷");
+}
+function downloadSyncDiagnosticsSnapshot() {
+  const code = appState.room?.meta?.code || "offline";
+  downloadTextFile(`bridge-sync-${code}-${Date.now()}.json`, JSON.stringify(collectSyncDiagnostics(appState.room), null, 2));
+  toast("已下載多人同步 JSON");
+}
+async function hostRepairStuckGame() {
+  if (!(appState.offline || isHost())) return toast("只有房主可以修復卡住狀態");
+  const room = appState.room;
+  const game = currentGame();
+  if (!room || !game) return toast("沒有可修復的牌局");
+  const state = detectStuckState(room);
+  const now = Date.now();
+  const patch = {};
+  let changed = false;
+  for (const [id, action] of Object.entries(room.actions || {})) {
+    if (action?.status === "processing" && now - Number(action.processingAt || 0) > STALE_PROCESSING_MS) {
+      patch[`actions/${id}/status`] = null;
+      patch[`actions/${id}/processingBy`] = null;
+      patch[`actions/${id}/processingAt`] = null;
+      patch[`actions/${id}/processorBuild`] = null;
+      changed = true;
+    }
+  }
+  const next = structuredCloneCompat(game);
+  normalizeGame(next);
+  if (next.phase === "trickPause" && next.pendingTrick && Number(next.pendingTrick.clearAt || 0) <= now) {
+    finishPendingTrick(next, true);
+    patch.game = next;
+    changed = true;
+  } else if (["auction", "openingLead", "play"].includes(next.phase)) {
+    if (!Number.isInteger(next.currentPlayer) || next.currentPlayer < 0 || next.currentPlayer > 3) {
+      next.currentPlayer = next.phase === "auction" ? next.dealer : (next.openingLeader ?? next.dealer ?? 2);
+      next.log.push("房主修復：currentPlayer 異常，已重設到可推進座位。");
+      next.updatedAt = now;
+      patch.game = next;
+      changed = true;
+    } else {
+      const controller = controllingSeatForCurrentAction(next);
+      const player = room.lobby?.seats?.[controller];
+      if (player?.type === "bot") {
+        const action = chooseBotAction(next, controller, room.lobby);
+        if (action) {
+          appendAiThought(next, controller, action, room.lobby);
+          const result = applyAction(next, { ...action, uid: player.uid, actorSeat: controller, createdAt: now }, room.lobby);
+          if (result.ok) {
+            patch.game = next;
+            changed = true;
+          }
+        }
+      }
+    }
+  }
+  if (Object.keys(patch).length) {
+    patch["meta/updatedAt"] = now;
+    await updateRoom(patch);
+  }
+  if ((room.actions && Object.keys(room.actions).length) && isHost()) setTimeout(maybeProcessActions, 80);
+  toast(changed ? `已嘗試修復：${state.title}` : `目前沒有可自動修復項目：${state.title}`);
+}
+
 function gameHealthHtml(game, room) {
   const health = inspectGameHealth(game, room);
   return `
@@ -2345,6 +2594,7 @@ function securityDesignHtml(game, room) {
       <li><b>公開狀態</b><span>合約、叫牌、桌面牌、已完成墩、墩數、玩家在線狀態。</span></li>
       <li><b>私人狀態</b><span>多人牌局已把目前手牌與原始手牌寫到 roomPrivateHands/{code}/{seat}；公開 game 不再保存四家手牌。</span></li>
       <li><b>動作驗證</b><span>真人只送出叫牌/出牌意圖，房主端依 UID、座位、輪到者、合法叫牌與跟牌規則驗證後才更新牌局。</span></li>
+      <li><b>觀戰模式</b><span>${room?.lobby?.settings?.allowSpectators === false ? "房主目前關閉觀戰加入" : "觀戰者只能讀公開資訊；未公開手牌在 UI 與資料結構中都不提供給觀戰者"}。</span></li>
       <li><b>部署提醒</b><span>${escapeHtml(secureRuleNote)}。純前端仍信任房主裝置；真正競賽級防作弊需 Cloud Functions 或可信伺服器。</span></li>
     </ul>
   `;
@@ -2375,6 +2625,36 @@ function inspectGameHealth(game, room) {
   const ok = items.every((i) => i.ok);
   return { ok, summary: ok ? "牌張、階段、輪到者與座位狀態看起來正常。" : "偵測到可能的同步或資料問題，可重新整理或請房主重新開局。", items };
 }
+
+function tutorialMissionChapter1Html(game, room) {
+  const mySeat = findSeatByUid(room, appState.uid, appState.clientId);
+  const playedAny = listFromFirebase(game?.trickHistory).length > 0 || listFromFirebase(game?.currentTrick).length > 0 || listFromFirebase(game?.pendingTrick?.plays).length > 0;
+  const hasFollowSituation = Boolean(game?.currentTrick?.length && mySeat != null && legalCardsForSeat(game, mySeat).length < (game.hands?.[mySeat] || []).length);
+  const tasks = [
+    { ok: Boolean(game?.auction?.length), label: "完成一次叫牌或觀察 AI 叫牌", help: "叫牌決定合約，Pass 也是合法叫品。" },
+    { ok: Boolean(game?.contract), label: "看懂合約與目標墩數", help: game?.contract ? `${contractText(game.contract, game.declarer)} 要拿 ${6 + game.contract.level} 墩。` : "叫牌結束後會出現合約。" },
+    { ok: Boolean(game?.mode === "standard" ? game?.dummyVisible : playedAny), label: "理解夢家 / 閉手模式", help: game?.mode === "standard" ? "標準模式首攻後夢家才亮牌。" : "閉手模式四手都不亮牌。" },
+    { ok: playedAny, label: "完成至少一次出牌", help: "輪到你時，合法牌會高亮，不能出的牌會變灰。" },
+    { ok: hasFollowSituation || listFromFirebase(game?.trickHistory).length >= 1, label: "學會跟牌規則", help: "有首引花色時必須跟同花色；沒有才可墊牌或將吃。" }
+  ];
+  const done = tasks.filter((t) => t.ok).length;
+  if (done >= tasks.length) localStorage.setItem(STORAGE.tutorialChapter1, "done");
+  const savedDone = localStorage.getItem(STORAGE.tutorialChapter1) === "done";
+  return `
+    <div class="tutorial-mission-card ${savedDone ? "done" : ""}">
+      <div class="tutorial-mission-head"><h3>新手教學任務｜第一章：跟牌與一墩</h3><span>${done}/${tasks.length}</span></div>
+      <p class="hint compact">這章只練基本流程：叫牌、看合約、首攻、跟牌、完成一墩。完成後可再進入後續進階章節。</p>
+      <ol>${tasks.map((task) => `<li class="${task.ok ? "ok" : "todo"}"><b>${task.ok ? "✓" : "○"} ${escapeHtml(task.label)}</b><span>${colorizeSuitsHtml(escapeHtml(task.help))}</span></li>`).join("")}</ol>
+      <button id="btnResetTutorialChapter1" class="ghost tiny" type="button">重置第一章進度</button>
+    </div>
+  `;
+}
+function resetTutorialChapter1() {
+  localStorage.removeItem(STORAGE.tutorialChapter1);
+  renderAll();
+  toast("已重置新手教學第一章");
+}
+
 function currentReviewText(game = currentGame()) {
   if (!game) return "尚未有牌局。";
   const review = contractReviewSummary(game);
@@ -3046,6 +3326,8 @@ function buildDetailedErrorReport() {
     pendingActions: Object.fromEntries(Object.entries(appState.room?.actions || {}).slice(-20)),
     processedActions: game?.processedActions || null,
     firebaseDiagnostic: firebaseDiagnosticSnapshot(),
+    syncDiagnostics: collectSyncDiagnostics(appState.room),
+    stuckDetection: detectStuckState(appState.room),
     match: appState.room?.match || null,
     health,
     publicRoom: safeRoom

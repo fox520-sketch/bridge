@@ -769,3 +769,33 @@ button .suit-symbol.black,
   .game-controls-grid, .host-tools .button-row { grid-template-columns: 1fr; }
   .toast { bottom: calc(104px + env(safe-area-inset-bottom)); max-width: calc(100% - 24px); text-align: center; }
 }
+
+
+/* v1.0.21 diagnostics, spectator and tutorial mission */
+.sync-panel { border-top: 1px solid var(--line); padding-top: .75rem; }
+.sync-summary { border-radius: 14px; padding: .65rem .75rem; display: grid; gap: .2rem; margin-bottom: .65rem; border: 1px solid var(--line); }
+.sync-summary.ok { background: rgba(34, 197, 94, .10); }
+.sync-summary.warn { background: rgba(245, 158, 11, .12); }
+.sync-summary.danger { background: rgba(239, 68, 68, .12); }
+.sync-summary span { font-size: .84rem; color: var(--muted); }
+.sync-grid { display: grid; grid-template-columns: 1fr auto; gap: .35rem .7rem; font-size: .86rem; margin: .6rem 0; }
+.sync-grid span { color: var(--muted); }
+.compact-sync-table { font-size: .78rem; }
+.compact-sync-table th, .compact-sync-table td { padding: .35rem .4rem; }
+.compact-actions { margin-top: .5rem; }
+.tutorial-mission-card { margin-top: .8rem; border: 1px solid var(--line); border-radius: 16px; padding: .85rem; background: color-mix(in srgb, var(--panel) 92%, var(--accent) 8%); }
+.tutorial-mission-card.done { outline: 2px solid rgba(34,197,94,.35); }
+.tutorial-mission-head { display: flex; justify-content: space-between; gap: .5rem; align-items: center; }
+.tutorial-mission-head h3 { margin: 0; }
+.tutorial-mission-head span { border-radius: 999px; padding: .2rem .55rem; background: var(--soft); font-weight: 800; }
+.tutorial-mission-card ol { margin: .7rem 0 0; padding-left: 1.1rem; display: grid; gap: .45rem; }
+.tutorial-mission-card li { padding: .45rem .55rem; border-radius: 12px; background: rgba(127,127,127,.08); }
+.tutorial-mission-card li.ok { background: rgba(34,197,94,.12); }
+.tutorial-mission-card li.todo { opacity: .86; }
+.tutorial-mission-card li span { display: block; color: var(--muted); font-size: .82rem; margin-top: .1rem; }
+.old-note { opacity: .7; }
+.spectator-badge { display:inline-flex; align-items:center; gap:.25rem; }
+@media (max-width: 760px) {
+  .sync-grid { grid-template-columns: 1fr; }
+  .compact-sync-table { display: block; overflow-x: auto; white-space: nowrap; }
+}
