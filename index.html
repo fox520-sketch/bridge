@@ -424,8 +424,19 @@
         </div>
       </section>
 
-      <aside class="right-panel panel log-panel">
-        <section class="record-panel game-tools-panel">
+      <aside class="right-panel panel log-panel drawer-collapsed" id="recordsDrawer" data-mobile-tab="tools">
+        <div class="record-mobile-head">
+          <b>紀錄 / 檢討</b>
+          <button id="btnRecordDrawerToggle" class="ghost tiny" type="button">展開</button>
+        </div>
+        <div class="record-tabs" role="tablist" aria-label="牌局紀錄分頁">
+          <button type="button" data-record-tab-btn="tools" class="active">工具</button>
+          <button type="button" data-record-tab-btn="auction">叫牌</button>
+          <button type="button" data-record-tab-btn="review">檢討</button>
+          <button type="button" data-record-tab-btn="tricks">出牌</button>
+          <button type="button" data-record-tab-btn="log">紀錄</button>
+        </div>
+        <section class="record-panel game-tools-panel" data-record-tab="tools">
           <h3>牌局工具</h3>
           <p class="hint compact">可複製完整牌譜，方便分享、回報問題或賽後檢討。</p>
           <div class="button-row">
@@ -434,22 +445,24 @@
             <button id="btnCopyReviewGame" class="ghost" type="button">複製檢討</button>
           </div>
         </section>
-        <section class="record-panel">
+        <section class="record-panel" data-record-tab="auction">
           <h3>叫牌紀錄表</h3>
           <div id="auctionRecord" class="record-scroll" aria-live="polite"></div>
         </section>
-        <section id="postHandReview" class="record-panel review-panel" aria-live="polite"></section>
-        <section id="gameHealthPanel" class="record-panel health-panel" aria-live="polite"></section>
-        <section class="record-panel">
+        <section id="postHandReview" class="record-panel review-panel" data-record-tab="review" aria-live="polite"></section>
+        <section id="gameHealthPanel" class="record-panel health-panel" data-record-tab="review" aria-live="polite"></section>
+        <section class="record-panel" data-record-tab="tricks">
           <h3>每墩出牌紀錄</h3>
           <div id="trickRecord" class="record-scroll" aria-live="polite"></div>
         </section>
-        <div class="log-header">
-          <h3>牌局紀錄</h3>
-          <button id="btnToggleLog" class="ghost log-toggle" type="button">顯示紀錄</button>
-        </div>
-        <p id="logSummary" class="log-summary">牌局紀錄已隱藏。</p>
-        <div id="log" class="log"></div>
+        <section class="record-panel log-record-panel" data-record-tab="log">
+          <div class="log-header">
+            <h3>牌局紀錄</h3>
+            <button id="btnToggleLog" class="ghost log-toggle" type="button">顯示紀錄</button>
+          </div>
+          <p id="logSummary" class="log-summary">牌局紀錄已隱藏。</p>
+          <div id="log" class="log"></div>
+        </section>
       </aside>
     </main>
 
@@ -623,6 +636,13 @@
         <h2>牌局回放</h2>
         <p id="replaySummary" class="hint"></p>
         <div class="button-row replay-actions"><button id="btnShareReplay" class="ghost" type="button">分享回放摘要</button><button id="btnCopyHandRecordReplay" class="ghost" type="button">複製完整牌譜</button></div>
+        <div class="replay-step-controls">
+          <button id="btnReplayPrev" class="ghost" type="button">上一步</button>
+          <select id="replayStepSelect" aria-label="回放步驟"></select>
+          <button id="btnReplayNext" class="ghost" type="button">下一步</button>
+          <button id="btnReplayPlay" class="primary" type="button">自動播放</button>
+        </div>
+        <div id="replayStepView" class="replay-step-view"></div>
         <div id="replayList" class="replay-list"></div>
       </div>
     </dialog>

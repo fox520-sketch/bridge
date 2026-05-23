@@ -1,5 +1,15 @@
 # 合約橋牌版本紀錄
 
+## v1.0.18-secure-ai-replay-drawer
+
+- 新增防作弊資料拆分設計文件 `ANTI_CHEAT_FIREBASE_DESIGN.md`，並更新 `database.rules.secure.example.json`。
+- 牌局健康檢查新增防作弊拆分提醒：公開資料、私人手牌、夢家公開與部署注意事項。
+- AI 叫牌升級為自然制第一版：五張高花、1NT 15–17、強 2♣、弱二、阻擊、支持同伴、競叫、Double。
+- 教練建議與 AI 思路紀錄改用自然制理由，玩家能看到建議叫品背後的 HCP / 牌型 / 配合邏輯。
+- 牌局回放升級為逐步回放，支援上一步、下一步、自動播放、桌面目前最大牌與當時剩餘手牌。
+- 手機版右側紀錄區改成分頁抽屜：工具、叫牌、檢討、出牌、紀錄。
+- 更新 Service Worker 快取版本為 `contract-bridge-v1-0-18-secure-ai-replay-drawer`。
+
 ## v1.0.17-mobile-safety-seat-tools
 
 - 新增手機快速跳轉列，可一鍵跳到牌桌、操作、手牌與紀錄。

@@ -1,5 +1,5 @@
-const BUILD = "bridge-v1.0.17-mobile-safety-seat-tools";
-const ROOM_SCHEMA_VERSION = 59;
+const BUILD = "bridge-v1.0.18-secure-ai-replay-drawer";
+const ROOM_SCHEMA_VERSION = 60;
 const SEATS = [
   { id: 0, key: "N", name: "北", team: "NS" },
   { id: 1, key: "E", name: "東", team: "EW" },
@@ -74,7 +74,10 @@ const appState = {
   lastTurnNoticeKey: null,
   updateWorker: null,
   uiTicker: null,
-  pendingPlay: null
+  pendingPlay: null,
+  replay: { game: null, steps: [], index: 0 },
+  recordsDrawerOpen: false,
+  mobileRecordTab: "tools"
 };
 
 function init() {
@@ -214,6 +217,12 @@ function bindEvents() {
   $("resultDownloadHandRecord")?.addEventListener("click", downloadCurrentHandRecord);
   $("resultCopyReview")?.addEventListener("click", copyCurrentReview);
   $("btnCopyHandRecordReplay")?.addEventListener("click", copyCurrentHandRecord);
+  $("btnReplayPrev")?.addEventListener("click", () => moveReplayStep(-1));
+  $("btnReplayNext")?.addEventListener("click", () => moveReplayStep(1));
+  $("btnReplayPlay")?.addEventListener("click", autoPlayReplay);
+  $("replayStepSelect")?.addEventListener("change", (e) => setReplayStep(Number(e.target.value || 0)));
+  $("btnRecordDrawerToggle")?.addEventListener("click", toggleRecordDrawer);
+  document.querySelectorAll("[data-record-tab-btn]").forEach((btn) => btn.addEventListener("click", () => setRecordTab(btn.dataset.recordTabBtn)));
   $("btnReloadUpdate").addEventListener("click", reloadForUpdate);
   $("btnDismissUpdate").addEventListener("click", () => $("updateBanner").classList.add("hidden"));
 }
@@ -529,6 +538,10 @@ function normalizeGame(game) {
   if (game.pendingTrick) game.pendingTrick.plays = listFromFirebase(game.pendingTrick.plays);
   const rawHands = game.hands || {};
   game.hands = [0, 1, 2, 3].map((seat) => listFromFirebase(rawHands[seat] ?? rawHands[String(seat)]));
+  const rawInitialHands = game.initialHands || game.hands || {};
+  game.initialHands = [0, 1, 2, 3].map((seat) => listFromFirebase(rawInitialHands[seat] ?? rawInitialHands[String(seat)]));
+  game.handCounts = [0, 1, 2, 3].map((seat) => Number(game.handCounts?.[seat] ?? game.hands?.[seat]?.length ?? game.initialHands?.[seat]?.length ?? 0));
+  game.security ||= { design: "public-state-private-hands", policy: "UI hides unrevealed hands; secure Firebase rules can enforce per-seat private data", schemaVersion: 1 };
   game.tricksWon ||= { NS: 0, EW: 0 };
   game.score ||= { NS: 0, EW: 0 };
   game.auction ||= [];
@@ -840,6 +853,13 @@ function createNewGame(room) {
     phase: "auction",
     currentPlayer: dealer,
     hands,
+    initialHands: hands.map((hand) => hand.map((card) => ({ ...card }))),
+    handCounts: [13, 13, 13, 13],
+    security: {
+      design: "public-state-private-hands",
+      policy: "UI never reveals unrevealed hands; deploy secure rules to enforce per-seat private hands at database layer",
+      schemaVersion: 1
+    },
     auction: [],
     contract: null,
     declarer: null,
@@ -1265,9 +1285,8 @@ function appendAiThought(game, controller, action, lobby) {
   const shape = shapeText(hand);
   let line = `AI 思路｜${seatName(seat)}：牌力 ${hcp} HCP，牌型 ${shape}。`;
   if (action.type === "call") {
-    const high = highestBid(game.auction);
-    const highText = high ? `目前最高 ${callText(high)} by ${SEATS[high.seat].key}` : "尚未有人叫牌";
-    line += ` ${highText}，選擇 ${callText(action.call)}。`;
+    const decision = naturalCallDecision(structuredCloneCompat(game), seat, lobby);
+    line += ` 選擇 ${callText(action.call)}。理由：${decision.reason || "依簡易自然制評估。"}`;
   } else if (action.type === "play") {
     const card = hand.find((c) => c.id === action.cardId);
     const legal = legalCardsForSeat(game, seat);
@@ -1278,30 +1297,98 @@ function appendAiThought(game, controller, action, lobby) {
   game.log.push(line);
 }
 function chooseBotCall(game, seat, lobby) {
-  const calls = legalCalls(game, seat);
-  const hand = game.hands[seat] || [];
+  return naturalCallDecision(game, seat, lobby).call || { type: "pass" };
+}
+
+function naturalCallDecision(game, seat, lobby = {}) {
+  normalizeGame(game);
+  const legal = legalCalls(game, seat);
+  const hand = game.hands?.[seat] || [];
   const hcp = handHcp(hand);
   const shape = suitLengths(hand);
-  const bestSuit = Object.entries(shape).sort((a, b) => b[1] - a[1] || suitHcp(hand, b[0]) - suitHcp(hand, a[0]))[0]?.[0] || "S";
-  const high = highestBid(game.auction);
-  const difficulty = Number(lobby?.settings?.difficulty || 10);
-  const bid = (level, suit) => calls.find((c) => c.type === "bid" && c.level === level && c.suit === suit);
+  const high = highestBid(game.auction || []);
+  const difficulty = Number(lobby?.settings?.difficulty || 12);
+  const bid = (level, suit) => legal.find((c) => c.type === "bid" && c.level === level && c.suit === suit);
+  const firstLegalBid = () => legal.find((c) => c.type === "bid");
+  const pass = (reason) => ({ call: { type: "pass" }, reason });
+  const choose = (call, reason) => ({ call: call || { type: "pass" }, reason });
+  const longestSuit = preferredOpeningSuit(hand);
+  const majors = ["S", "H"].filter((suit) => shape[suit] >= 5).sort((a, b) => shape[b] - shape[a] || suitHcp(hand, b) - suitHcp(hand, a));
+  const sixSuit = ["S", "H", "D", "C"].find((suit) => shape[suit] >= 6);
+  const team = teamOf(seat);
+
   if (!high) {
-    if (isBalanced(hand) && hcp >= 15 && hcp <= 17 && bid(1, "NT")) return bid(1, "NT");
-    if (hcp >= 12) return bid(1, bestSuit) || calls.find((c) => c.type === "bid") || { type: "pass" };
-    if (difficulty > 14 && shape[bestSuit] >= 7 && hcp >= 6) return bid(3, bestSuit) || bid(2, bestSuit) || { type: "pass" };
-    return { type: "pass" };
-  }
-  if (teamOf(high.seat) === teamOf(seat)) {
-    if (hcp >= 12 && calls.some((c) => c.type === "bid")) {
-      if (shape[high.suit] >= 3 && high.suit !== "NT") return calls.find((c) => c.type === "bid" && c.suit === high.suit && c.level <= Math.min(4, high.level + 1)) || { type: "pass" };
-      if (isBalanced(hand)) return calls.find((c) => c.type === "bid" && c.suit === "NT" && c.level <= 3) || { type: "pass" };
+    if (hcp >= 22 && bid(2, "C")) return choose(bid(2, "C"), `強牌 ${hcp} HCP，使用強 2♣ 開叫，表示有滿貫或成局潛力。`);
+    if (isBalanced(hand) && hcp >= 20 && hcp <= 21 && bid(2, "NT")) return choose(bid(2, "NT"), `均型 ${hcp} HCP，符合 20–21 點 2NT 開叫。`);
+    if (isBalanced(hand) && hcp >= 15 && hcp <= 17 && bid(1, "NT")) return choose(bid(1, "NT"), `均型 ${hcp} HCP，符合 15–17 點 1NT 開叫。`);
+    if (hcp >= 12 || (hcp >= 11 && (shape["S"] >= 5 || shape["H"] >= 5 || shape[longestSuit] >= 6))) {
+      const suit = majors[0] || longestSuit;
+      return choose(bid(1, suit) || firstLegalBid(), `${hcp} HCP，牌型 ${shapeText(hand)}；自然制優先開五張高花，否則開最長花色 ${SUITS[suit].symbol}。`);
     }
-    return { type: "pass" };
+    if (difficulty >= 10 && sixSuit && shape[sixSuit] >= 6 && hcp >= 6 && hcp <= 10 && bid(2, sixSuit)) {
+      return choose(bid(2, sixSuit), `${hcp} HCP、${SUITS[sixSuit].symbol} 六張以上，採弱二開叫干擾對手。`);
+    }
+    const sevenSuit = ["S", "H", "D", "C"].find((suit) => shape[suit] >= 7);
+    if (difficulty >= 12 && sevenSuit && hcp >= 5 && hcp <= 10 && bid(3, sevenSuit)) {
+      return choose(bid(3, sevenSuit), `${hcp} HCP、${SUITS[sevenSuit].symbol} 七張長門，採三階阻擊叫。`);
+    }
+    return pass(`${hcp} HCP 未達一般開叫牌力，先 Pass。`);
   }
-  if (hcp >= 16 && calls.some((c) => c.type === "double")) return { type: "double" };
-  if (hcp >= 13 && shape[bestSuit] >= 5) return calls.find((c) => c.type === "bid" && c.suit === bestSuit && c.level <= 3) || { type: "pass" };
-  return { type: "pass" };
+
+  const partnerHigh = teamOf(high.seat) === team;
+  const highLevel = Number(high.level || 0);
+  const highSuit = high.suit;
+  if (partnerHigh) {
+    if (highSuit !== "NT") {
+      const support = shape[highSuit] || 0;
+      const isMajor = highSuit === "S" || highSuit === "H";
+      const supportFit = support >= (isMajor ? 3 : 4);
+      if (supportFit) {
+        const gameLevel = isMajor ? 4 : 5;
+        if (hcp >= 13 && bid(gameLevel, highSuit)) return choose(bid(gameLevel, highSuit), `${hcp} HCP 且有 ${support} 張 ${SUITS[highSuit].symbol} 支持，估計我方有成局，直接叫成局。`);
+        if (hcp >= 10 && bid(Math.min(gameLevel - 1, highLevel + 2), highSuit)) return choose(bid(Math.min(gameLevel - 1, highLevel + 2), highSuit), `${hcp} HCP 且有 ${support} 張支持，作邀請性加叫。`);
+        if (hcp >= 6 && bid(highLevel + 1, highSuit)) return choose(bid(highLevel + 1, highSuit), `${hcp} HCP 且有 ${support} 張支持，簡單加叫同伴花色。`);
+      }
+      const newSuit = responseSuit(hand, highSuit);
+      if (hcp >= 10 && newSuit && bid(Math.max(1, highLevel), newSuit)) return choose(bid(Math.max(1, highLevel), newSuit), `${hcp} HCP，未找到足夠支持，先叫自己的長門 ${SUITS[newSuit].symbol}。`);
+      if (isBalanced(hand) && hcp >= 12 && bid(3, "NT")) return choose(bid(3, "NT"), `${hcp} HCP 均型且未配合高花，考慮 3NT 成局。`);
+      if (isBalanced(hand) && hcp >= 8 && bid(2, "NT")) return choose(bid(2, "NT"), `${hcp} HCP 均型，2NT 邀請同伴成局。`);
+    } else {
+      if (hcp >= 10 && bid(3, "NT")) return choose(bid(3, "NT"), `同伴已叫 NT，你有 ${hcp} HCP，合計大約有成局牌力，叫 3NT。`);
+      if (hcp >= 8 && bid(2, "NT")) return choose(bid(2, "NT"), `同伴 NT 後你有 ${hcp} HCP，2NT 邀請成局。`);
+      const major = majors[0];
+      if (major && hcp >= 8 && bid(2, major)) return choose(bid(2, major), `同伴 NT 後你有五張高花 ${SUITS[major].symbol}，先尋找高花合約。`);
+    }
+    return pass(`${hcp} HCP，目前已由同伴掌握叫牌；沒有足夠牌力或配合，Pass。`);
+  }
+
+  if (hcp >= 16 && legal.some((c) => c.type === "double")) return choose({ type: "double" }, `${hcp} HCP，對手叫牌後以 Double 表示強牌或可防守。`);
+  const overcallSuit = preferredOvercallSuit(hand, highSuit);
+  if (overcallSuit && hcp >= 8) {
+    const level = cheapestLevelForSuitOver(high, overcallSuit);
+    if (level <= 3 && bid(level, overcallSuit)) return choose(bid(level, overcallSuit), `${hcp} HCP 且 ${SUITS[overcallSuit].symbol} 長門，選擇 ${level}${SUITS[overcallSuit].symbol} 競叫。`);
+  }
+  if (isBalanced(hand) && hcp >= 15 && hcp <= 18 && highLevel === 1 && bid(1, "NT")) return choose(bid(1, "NT"), `${hcp} HCP 均型，在一階競叫 1NT。`);
+  return pass(`${hcp} HCP，對手已有 ${callText(high)}；目前不宜冒險競叫，Pass。`);
+}
+
+function preferredOpeningSuit(hand) {
+  const shape = suitLengths(hand);
+  const major = ["S", "H"].filter((s) => shape[s] >= 5).sort((a, b) => shape[b] - shape[a] || suitHcp(hand, b) - suitHcp(hand, a))[0];
+  if (major) return major;
+  return ["S", "H", "D", "C"].sort((a, b) => shape[b] - shape[a] || suitHcp(hand, b) - suitHcp(hand, a) || SUITS[b].order - SUITS[a].order)[0] || "C";
+}
+function responseSuit(hand, partnerSuit) {
+  const shape = suitLengths(hand);
+  return ["S", "H", "D", "C"].filter((s) => s !== partnerSuit && shape[s] >= 4).sort((a, b) => shape[b] - shape[a] || suitHcp(hand, b) - suitHcp(hand, a))[0] || null;
+}
+function preferredOvercallSuit(hand, opponentSuit) {
+  const shape = suitLengths(hand);
+  return ["S", "H", "D", "C"].filter((s) => s !== opponentSuit && shape[s] >= 5).sort((a, b) => shape[b] - shape[a] || suitHcp(hand, b) - suitHcp(hand, a))[0] || null;
+}
+function cheapestLevelForSuitOver(high, suit) {
+  for (let level = 1; level <= 7; level++) if (bidRank({ type: "bid", level, suit }) > bidRank(high)) return level;
+  return 8;
 }
 function handHcp(hand) { return hand.reduce((sum, c) => sum + (HCP[c.rank] || 0), 0); }
 function suitHcp(hand, suit) { return hand.filter((c) => c.suit === suit).reduce((sum, c) => sum + (HCP[c.rank] || 0), 0); }
@@ -1395,6 +1482,7 @@ function renderGame(room) {
   renderTurnWaitCard(room);
   renderTurnAlert(room);
   renderMobileQuickNav(room);
+  renderRecordDrawerState();
   renderLog(game);
   updateBrowserTitle(game, room);
   renderTips(game, room);
@@ -1647,9 +1735,35 @@ function renderMobileQuickNav(room) {
   `;
   nav.querySelectorAll("[data-scroll-target]").forEach((btn) => btn.addEventListener("click", () => {
     const id = btn.dataset.scrollTarget;
+    if (id === "auctionRecord") {
+      setRecordTab("auction");
+      $("recordsDrawer")?.scrollIntoView({ behavior: "smooth", block: "end" });
+      return;
+    }
     const target = id === "handPanel" ? document.querySelector(".hand-panel") : $(id);
     target?.scrollIntoView({ behavior: "smooth", block: "center" });
   }));
+}
+
+
+function toggleRecordDrawer() {
+  appState.recordsDrawerOpen = !appState.recordsDrawerOpen;
+  renderRecordDrawerState();
+}
+function setRecordTab(tab) {
+  appState.mobileRecordTab = tab || "tools";
+  appState.recordsDrawerOpen = true;
+  renderRecordDrawerState();
+}
+function renderRecordDrawerState() {
+  const drawer = $("recordsDrawer");
+  if (!drawer) return;
+  const tab = appState.mobileRecordTab || "tools";
+  drawer.dataset.mobileTab = tab;
+  drawer.classList.toggle("drawer-collapsed", !appState.recordsDrawerOpen);
+  const toggle = $("btnRecordDrawerToggle");
+  if (toggle) toggle.textContent = appState.recordsDrawerOpen ? "收合" : "展開";
+  document.querySelectorAll("[data-record-tab-btn]").forEach((btn) => btn.classList.toggle("active", btn.dataset.recordTabBtn === tab));
 }
 
 function renderRecords(game) {
@@ -1728,6 +1842,21 @@ function gameHealthHtml(game, room) {
     <h3>牌局健康檢查</h3>
     <div class="health-summary ${health.ok ? "ok" : "danger"}"><b>${health.ok ? "同步正常" : "需要注意"}</b><span>${escapeHtml(health.summary)}</span></div>
     <ul class="health-list">${health.items.map((item) => `<li class="${item.ok ? "ok" : "danger"}"><span>${escapeHtml(item.label)}</span><b>${escapeHtml(item.value)}</b></li>`).join("")}</ul>
+    ${securityDesignHtml(game, room)}
+  `;
+}
+function securityDesignHtml(game, room) {
+  const mySeat = findSeatByUid(room, appState.uid, appState.clientId);
+  const dummyPublic = Boolean(game?.mode === "standard" && game?.dummyVisible);
+  const secureRuleNote = appState.offline ? "離線局不需 Firebase 規則" : "請部署 database.rules.secure.example.json 後，搭配 public/private 路徑逐步切換";
+  return `
+    <h3>防作弊資料拆分設計</h3>
+    <ul class="security-list">
+      <li><b>玩家可見手牌</b><span>${mySeat == null ? "觀戰：只看公開資訊" : `你是 ${SEATS[mySeat].key}，UI 只操作自己的手牌${dummyPublic ? "；夢家已公開" : ""}`}</span></li>
+      <li><b>公開狀態</b><span>合約、叫牌、桌面牌、已完成墩、墩數、玩家在線狀態。</span></li>
+      <li><b>私人狀態設計</b><span>每家 13 張牌應拆到 privateHands/{seat}，只允許該座位、房主裁判流程或結束後回放讀取。</span></li>
+      <li><b>部署提醒</b><span>${escapeHtml(secureRuleNote)}。</span></li>
+    </ul>
   `;
 }
 function inspectGameHealth(game, room) {
@@ -2081,15 +2210,8 @@ function attachSuggestionActions(container, mySeat) {
 }
 function suggestCall(game, seat) {
   try {
-    const hand = game.hands?.[seat] || [];
-    const call = chooseBotCall(structuredCloneCompat(game), seat, appState.room?.lobby || { settings: { difficulty: 12 } });
-    const hcp = handHcp(hand);
-    const shape = shapeText(hand);
-    const high = highestBid(game.auction || []);
-    const reason = call?.type === "pass"
-      ? `${hcp} HCP，牌型 ${shape}。目前${high ? `已有 ${callText(high)}` : "尚未叫牌"}，保守選擇 Pass。`
-      : `${hcp} HCP，牌型 ${shape}。依目前簡易 AI 牌力評估，優先選 ${callText(call)}。`;
-    return { call, reason };
+    const decision = naturalCallDecision(structuredCloneCompat(game), seat, appState.room?.lobby || { settings: { difficulty: 12 } });
+    return { call: decision.call, reason: `自然制第一版：${decision.reason}` };
   } catch (error) {
     console.warn("suggestCall failed", error);
     return null;
@@ -2183,7 +2305,7 @@ function renderAuctionControls(container, game, mySeat, options = {}) {
   for (const call of legal.filter((c) => c.type !== "bid")) {
     const btn = button(callText(call), call.type === "pass" ? "primary" : "ghost", () => submitAction({ type: "call", seat: mySeat, call }));
     btn.innerHTML = callTextHtml(call);
-    btn.title = `${seatName(mySeat)} 叫 ${callText(call)}`;
+    btn.title = `${seatName(mySeat)} 叫 ${callText(call)}｜${callTeachingText(call)}`;
     basic.appendChild(btn);
   }
   wrap.appendChild(basic);
@@ -2197,12 +2319,26 @@ function renderAuctionControls(container, game, mySeat, options = {}) {
       btn.innerHTML = `${level}${suitSymbolHtml(suit)}`;
       const ok = legal.some((c) => c.type === "bid" && c.level === level && c.suit === suit);
       btn.disabled = !ok;
-      btn.title = ok ? `${seatName(mySeat)} 叫 ${callText(call)}` : "此叫品目前不合法";
+      btn.title = ok ? `${seatName(mySeat)} 叫 ${callText(call)}｜${callTeachingText(call)}` : "此叫品目前不合法：必須高於目前最高叫品";
       bidGrid.appendChild(btn);
     }
   }
   wrap.appendChild(bidGrid);
   container.appendChild(wrap);
+}
+
+
+function callTeachingText(call) {
+  if (!call || call.type === "pass") return "Pass 表示目前不提高合約；連續三家 Pass 後叫牌結束。";
+  if (call.type === "double") return "Double 是賭倍，通常表示想懲罰對手或有特定搭檔約定。";
+  if (call.type === "redouble") return "Redouble 是再賭倍，通常表示不怕對手的 Double。";
+  if (call.type === "bid") {
+    const target = 6 + Number(call.level || 0);
+    const suit = call.suit === "NT" ? "無王" : `${SUITS[call.suit]?.symbol || call.suit}${SUITS[call.suit]?.name || ""}`;
+    const gameHint = contractBasePoints(call.level, call.suit) >= 100 ? "這是成局級或更高合約。" : "這仍是部分合約或邀請路線。";
+    return `${callText(call)} 表示以 ${suit} 為名目，至少要贏 ${target} 墩。${gameHint}`;
+  }
+  return "叫品說明";
 }
 
 function auctionControlStatusText(game, mySeat) {
@@ -2496,8 +2632,11 @@ function handRecordText(game = currentGame(), room = appState.room) {
   lines.push(`墩數：NS ${game.tricksWon?.NS || 0}｜EW ${game.tricksWon?.EW || 0}`);
   if (game.result?.summary) lines.push(`結果：${game.result.summary}`);
   lines.push("");
-  lines.push("四家手牌：");
-  for (const seat of [0, 1, 2, 3]) lines.push(`${SEATS[seat].key} ${seatName(seat)}：${handBySuitText(game.hands?.[seat] || [])}（${handHcp(game.hands?.[seat] || [])} HCP）`);
+  lines.push("四家原始手牌：");
+  for (const seat of [0, 1, 2, 3]) {
+    const original = originalHand(game, seat);
+    lines.push(`${SEATS[seat].key} ${seatName(seat)}：${handBySuitText(original)}（${handHcp(original)} HCP）`);
+  }
   lines.push("");
   lines.push("叫牌：");
   const auction = listFromFirebase(game.auction);
@@ -2512,6 +2651,20 @@ function handRecordText(game = currentGame(), room = appState.room) {
   }
   return lines.join("\n");
 }
+
+function originalHand(game, seat) {
+  const initial = game?.initialHands?.[seat] || [];
+  if (initial.length) return initial;
+  const current = game?.hands?.[seat] || [];
+  const played = [];
+  for (const trick of listFromFirebase(game?.trickHistory || [])) {
+    for (const play of listFromFirebase(trick.plays)) if (Number(play.seat) === Number(seat) && play.card) played.push(play.card);
+  }
+  for (const play of listFromFirebase(game?.currentTrick || [])) if (Number(play.seat) === Number(seat) && play.card) played.push(play.card);
+  if (game?.pendingTrick) for (const play of listFromFirebase(game.pendingTrick.plays)) if (Number(play.seat) === Number(seat) && play.card) played.push(play.card);
+  return sortHand([...current, ...played]);
+}
+
 function handBySuitText(hand) {
   const bySuit = { S: [], H: [], D: [], C: [] };
   for (const card of sortHand([...hand])) bySuit[card.suit]?.push(card.rank);
@@ -2524,18 +2677,110 @@ async function copyCurrentHandRecord() {
 function openReplayDialog(game) {
   if (!game) return;
   normalizeGame(game);
-  $("replaySummary").innerHTML = colorizeSuitsHtml(game.result?.summary || `${contractText(game.contract, game.declarer)}｜${modeLabel(game.mode)}`);
+  appState.replay = { game: structuredCloneCompat(game), steps: buildReplaySteps(game), index: 0 };
+  $("replaySummary").innerHTML = colorizeSuitsHtml(game.result?.summary || `${game.contract ? contractText(game.contract, game.declarer) : "尚未成立合約"}｜${modeLabel(game.mode)}`);
+  renderReplayControls();
+  renderReplayStep();
+  $("replayDialog").showModal();
+}
+function buildReplaySteps(game) {
+  const steps = [{ index: 0, title: "起手 / 叫牌後", subtitle: "尚未出牌", plays: [], currentTrick: [], winner: null }];
+  const ordered = [];
+  for (const trick of listFromFirebase(game.trickHistory)) {
+    const plays = listFromFirebase(trick.plays);
+    plays.forEach((play, playIndex) => ordered.push({ trickNo: trick.no, play, playIndex, winner: trick.winner, team: trick.team, trickPlays: plays }));
+  }
+  if (game.pendingTrick?.plays) {
+    const plays = listFromFirebase(game.pendingTrick.plays);
+    plays.forEach((play, playIndex) => ordered.push({ trickNo: game.pendingTrick.no || (game.trickHistory?.length || 0) + 1, play, playIndex, winner: game.pendingTrick.winner, team: game.pendingTrick.team, trickPlays: plays, pending: true }));
+  } else if (game.currentTrick?.length) {
+    const plays = listFromFirebase(game.currentTrick);
+    plays.forEach((play, playIndex) => ordered.push({ trickNo: (game.trickHistory?.length || 0) + 1, play, playIndex, winner: null, team: null, trickPlays: plays, live: true }));
+  }
+  const seen = [];
+  ordered.forEach((item, idx) => {
+    seen.push(item.play);
+    const currentTrick = seen.filter((p) => {
+      const start = Math.max(0, seen.length - ((item.playIndex || 0) + 1));
+      return seen.indexOf(p) >= start;
+    });
+    const title = `第 ${item.trickNo} 墩｜第 ${item.playIndex + 1} 張：${seatName(item.play.seat)} 出 ${item.play.card.label}`;
+    const subtitle = item.winner != null && item.playIndex === 3 ? `${seatName(item.winner)} 贏得本墩（${item.team}）` : `本墩進行中 ${item.playIndex + 1}/4`;
+    steps.push({ index: idx + 1, title, subtitle, plays: [...seen], currentTrick, winner: item.winner, team: item.team, trickNo: item.trickNo });
+  });
+  return steps;
+}
+function renderReplayControls() {
+  const select = $("replayStepSelect");
+  const replay = appState.replay || { steps: [], index: 0 };
+  if (select) {
+    select.innerHTML = replay.steps.map((step, idx) => `<option value="${idx}">${idx + 1}. ${escapeHtml(step.title)}</option>`).join("");
+    select.value = String(replay.index || 0);
+  }
+  const prev = $("btnReplayPrev");
+  const next = $("btnReplayNext");
+  if (prev) prev.disabled = replay.index <= 0;
+  if (next) next.disabled = replay.index >= replay.steps.length - 1;
+}
+function setReplayStep(index) {
+  const replay = appState.replay;
+  if (!replay?.steps?.length) return;
+  replay.index = Math.max(0, Math.min(replay.steps.length - 1, Number(index) || 0));
+  renderReplayControls();
+  renderReplayStep();
+}
+function moveReplayStep(delta) { setReplayStep((appState.replay?.index || 0) + Number(delta || 0)); }
+function autoPlayReplay() {
+  const replay = appState.replay;
+  if (!replay?.steps?.length) return;
+  if (replay._timer) {
+    clearInterval(replay._timer);
+    replay._timer = null;
+    $("btnReplayPlay").textContent = "自動播放";
+    return;
+  }
+  $("btnReplayPlay").textContent = "停止播放";
+  replay._timer = setInterval(() => {
+    if ((appState.replay.index || 0) >= appState.replay.steps.length - 1) {
+      clearInterval(appState.replay._timer);
+      appState.replay._timer = null;
+      $("btnReplayPlay").textContent = "自動播放";
+      return;
+    }
+    moveReplayStep(1);
+  }, 900);
+}
+function renderReplayStep() {
+  const replay = appState.replay;
+  const game = replay?.game;
+  const step = replay?.steps?.[replay.index || 0];
+  if (!game || !step) return;
+  const playedIds = new Set(step.plays.map((p) => p.card?.id).filter(Boolean));
+  const remainingBySeat = [0, 1, 2, 3].map((seat) => originalHand(game, seat).filter((card) => !playedIds.has(card.id)));
+  const currentWinner = currentWinningPlay(step.currentTrick || [], game.contract?.suit);
+  const table = [0, 1, 2, 3].map((seat) => {
+    const play = (step.currentTrick || []).find((p) => Number(p.seat) === seat);
+    const win = play && currentWinner && currentWinner.seat === play.seat && currentWinner.card?.id === play.card?.id;
+    return `<div class="replay-step-card"><b>${SEATS[seat].key} ${seatName(seat)}</b>${play ? cardHtml(play.card, { winning: win }) : `<span class="hint compact">尚未出牌</span>`}</div>`;
+  }).join("");
+  const hands = [0, 1, 2, 3].map((seat) => `<div class="replay-hand"><b>${SEATS[seat].key} ${seatName(seat)}｜${remainingBySeat[seat].length} 張</b><br>${colorizeSuitsHtml(handBySuitText(remainingBySeat[seat]))}</div>`).join("");
+  $("replayStepView").innerHTML = `
+    <h3>${escapeHtml(step.title)}</h3>
+    <p class="hint compact">${colorizeSuitsHtml(step.subtitle)}${currentWinner ? `｜目前最大：${seatName(currentWinner.seat)} ${cardTextHtml(currentWinner.card)}` : ""}</p>
+    <div class="replay-step-grid">${table}</div>
+    <h3>當時剩餘手牌</h3>
+    <div class="replay-hand-grid">${hands}</div>
+  `;
   const tricks = listFromFirebase(game.trickHistory);
   $("replayList").innerHTML = [
-    `<div class="replay-item"><b>牌局資訊</b><div class="plays"><span>${modeLabel(game.mode)}</span><span>${vulnerabilityLabel(game.vulnerability)}</span><span>${colorizeSuitsHtml(game.contract ? contractText(game.contract, game.declarer) : "尚未成立")}</span></div></div>`,
+    `<div class="replay-item"><b>完整出牌清單</b><div class="plays"><span>${modeLabel(game.mode)}</span><span>${vulnerabilityLabel(game.vulnerability)}</span><span>${colorizeSuitsHtml(game.contract ? contractText(game.contract, game.declarer) : "尚未成立")}</span></div></div>`,
     ...(tricks.length ? tricks.map((trick) => `
       <div class="replay-item">
         <b>第 ${trick.no} 墩：${seatName(trick.winner)} 贏得（${trick.team}）</b>
         <div class="plays">${listFromFirebase(trick.plays).map((p) => `<span>${seatName(p.seat)} ${cardTextHtml(p.card)}</span>`).join("｜")}</div>
       </div>
-    `) : [`<div class="replay-item">沒有打牌紀錄。</div>`])
+    `) : [`<div class="replay-item">沒有完成的墩紀錄。</div>`])
   ].join("");
-  $("replayDialog").showModal();
 }
 async function shareReplay() { await copyText($("replaySummary").textContent + "\n" + $("replayList").innerText); toast("已複製回放摘要"); }
 
