@@ -532,3 +532,51 @@ button .suit-symbol.black,
   .wait-card-head, .wait-meta { align-items: stretch; flex-direction: column; }
   .wait-card .ghost.tiny { width: 100%; }
 }
+
+
+/* v1.0.16: post-hand review, health check, and TXT export controls */
+.review-panel, .health-panel { display: grid; gap: 10px; }
+.review-summary, .health-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 11px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel-strong), transparent 8%);
+}
+.review-summary div, .health-summary { min-width: 0; }
+.review-summary b, .health-summary b { display: block; color: var(--ink); }
+.review-summary span, .health-summary span { display: block; color: var(--muted); font-size: .9rem; line-height: 1.4; }
+.review-summary em {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-style: normal;
+  font-weight: 900;
+  font-size: .82rem;
+  border: 1px solid var(--line);
+}
+.review-summary.ok em, .review-summary.done em, .health-summary.ok b { color: var(--ok); }
+.review-summary.warn em { color: var(--warn); }
+.review-summary.danger em, .health-summary.danger b { color: var(--danger); }
+.review-panel ul, .health-list { margin: 0; padding-left: 1.1rem; color: var(--muted); line-height: 1.5; }
+.health-list { display: grid; gap: 6px; padding: 0; list-style: none; }
+.health-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px dashed var(--line);
+}
+.health-list li:last-child { border-bottom: 0; }
+.health-list span { color: var(--muted); }
+.health-list b { text-align: right; font-size: .9rem; }
+.health-list li.ok b { color: var(--ok); }
+.health-list li.danger b { color: var(--danger); }
+@media (max-width: 760px) {
+  .review-summary, .health-summary, .health-list li { align-items: stretch; flex-direction: column; }
+  .health-list b { text-align: left; }
+}

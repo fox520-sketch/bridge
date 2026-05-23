@@ -1,4 +1,4 @@
-const BUILD = "bridge-v1.0.15-wait-countdown-offline-control";
+const BUILD = "bridge-v1.0.16-review-health-export";
 const ROOM_SCHEMA_VERSION = 58;
 const SEATS = [
   { id: 0, key: "N", name: "北", team: "NS" },
@@ -200,7 +200,11 @@ function bindEvents() {
   $("closeReplay").addEventListener("click", () => $("replayDialog").close());
   $("btnShareReplay").addEventListener("click", shareReplay);
   $("btnCopyHandRecordGame")?.addEventListener("click", copyCurrentHandRecord);
+  $("btnDownloadHandRecordGame")?.addEventListener("click", downloadCurrentHandRecord);
+  $("btnCopyReviewGame")?.addEventListener("click", copyCurrentReview);
   $("resultCopyHandRecord")?.addEventListener("click", copyCurrentHandRecord);
+  $("resultDownloadHandRecord")?.addEventListener("click", downloadCurrentHandRecord);
+  $("resultCopyReview")?.addEventListener("click", copyCurrentReview);
   $("btnCopyHandRecordReplay")?.addEventListener("click", copyCurrentHandRecord);
   $("btnReloadUpdate").addEventListener("click", reloadForUpdate);
   $("btnDismissUpdate").addEventListener("click", () => $("updateBanner").classList.add("hidden"));
@@ -1341,6 +1345,7 @@ function renderGame(room) {
   renderHand(room);
   renderActions(room);
   renderRecords(game);
+  renderPostHandReview(game, room);
   renderGameRoomStatus(room);
   renderDealProgress(game, room);
   renderTurnWaitCard(room);
@@ -1580,6 +1585,128 @@ function renderRecords(game) {
   const trickEl = $("trickRecord");
   if (auctionEl) auctionEl.innerHTML = auctionTableHtml(game);
   if (trickEl) trickEl.innerHTML = trickRecordHtml(game);
+}
+
+function renderPostHandReview(game, room) {
+  const reviewEl = $("postHandReview");
+  if (reviewEl) reviewEl.innerHTML = postHandReviewHtml(game, room);
+  const healthEl = $("gameHealthPanel");
+  if (healthEl) healthEl.innerHTML = gameHealthHtml(game, room);
+}
+function postHandReviewHtml(game, room) {
+  const review = contractReviewSummary(game);
+  const badgeClass = review.state === "good" ? "ok" : review.state === "danger" ? "danger" : review.state === "done" ? "ok" : "warn";
+  const detail = review.detail.length ? `<ul>${review.detail.map((x) => `<li>${colorizeSuitsHtml(escapeHtml(x))}</li>`).join("")}</ul>` : `<p class="hint compact">目前資料不足，等合約成立或牌局結束後會顯示更完整檢討。</p>`;
+  return `
+    <h3>牌局檢討</h3>
+    <div class="review-summary ${badgeClass}">
+      <div><b>${escapeHtml(review.title)}</b><span>${colorizeSuitsHtml(review.subtitle)}</span></div>
+      <em>${escapeHtml(review.badge)}</em>
+    </div>
+    ${detail}
+  `;
+}
+function contractReviewSummary(game) {
+  if (!game?.contract) {
+    const high = highestBid(game?.auction || []);
+    return {
+      state: "warn",
+      title: "尚未成立合約",
+      subtitle: high ? `目前最高叫品 ${callText(high)} by ${SEATS[high.seat]?.key || "?"}` : "仍在叫牌或四家尚未叫出合約。",
+      badge: game?.phase === "scoring" ? "Passed out" : "叫牌中",
+      detail: ["觀察叫牌紀錄表：最後一個非 Pass 叫品會成為合約，之後連續三家 Pass 才進入打牌。"]
+    };
+  }
+  const declaringTeam = teamOf(game.declarer);
+  const defenders = declaringTeam === "NS" ? "EW" : "NS";
+  const target = 6 + Number(game.contract.level || 0);
+  const madeNow = Number(game.tricksWon?.[declaringTeam] || 0) + (game.phase === "trickPause" && game.pendingTrick?.team === declaringTeam ? 1 : 0);
+  const defNow = Number(game.tricksWon?.[defenders] || 0) + (game.phase === "trickPause" && game.pendingTrick?.team === defenders ? 1 : 0);
+  const completed = listFromFirebase(game.trickHistory).length + (game.phase === "trickPause" && game.pendingTrick ? 1 : 0);
+  const remaining = Math.max(0, 13 - completed);
+  const final = game.phase === "scoring";
+  const diff = madeNow - target;
+  const contract = contractText(game.contract, game.declarer);
+  const suitName = game.contract.suit === "NT" ? "無王" : `${SUITS[game.contract.suit]?.symbol || ""}${SUITS[game.contract.suit]?.name || ""}王牌`;
+  if (final) {
+    const made = diff >= 0;
+    const badge = made ? (diff ? `+${diff}` : "剛好") : `${Math.abs(diff)} down`;
+    const detail = [
+      `合約方 ${declaringTeam} 目標 ${target} 墩，實得 ${madeNow} 墩；防家 ${defenders} 得 ${defNow} 墩。`,
+      made ? `成約${diff > 0 ? `並超 ${diff} 墩` : "，剛好完成合約"}。` : `倒約 ${Math.abs(diff)} 墩，可用回放檢查失去控制的關鍵墩。`,
+      `合約名目：${suitName}；莊家 ${seatName(game.declarer)}，${game.mode === "standard" ? "夢家" : "同伴"} ${seatName(game.dummy)}。`
+    ];
+    if (game.result?.detail?.length) detail.push(`計分拆解：${game.result.detail.join("｜")}`);
+    return { state: made ? "done" : "danger", title: `${contract}｜${made ? "成約" : "失敗"}`, subtitle: game.result?.summary || `合約方 ${madeNow}/${target} 墩`, badge, detail };
+  }
+  const canStillMake = madeNow + remaining >= target;
+  const alreadyMade = madeNow >= target;
+  const state = alreadyMade ? "good" : canStillMake ? "warn" : "danger";
+  const need = Math.max(0, target - madeNow);
+  const detail = [
+    `合約方 ${declaringTeam} 目前 ${madeNow} 墩，目標 ${target} 墩，還差 ${need} 墩；剩餘 ${remaining} 墩。`,
+    alreadyMade ? "合約方已達標，接下來是爭取超墩。" : canStillMake ? "合約仍有機會完成，重點是避免不必要失墩。" : "即使剩餘全拿也無法完成合約，接下來只能控制倒約數。",
+    `防家 ${defenders} 目前 ${defNow} 墩；合約名目：${suitName}。`
+  ];
+  return { state, title: `${contract}｜進行中`, subtitle: `${declaringTeam} ${madeNow}/${target} 墩，剩餘 ${remaining} 墩`, badge: alreadyMade ? "已達標" : canStillMake ? `差 ${need}` : "已無法成約", detail };
+}
+function gameHealthHtml(game, room) {
+  const health = inspectGameHealth(game, room);
+  return `
+    <h3>牌局健康檢查</h3>
+    <div class="health-summary ${health.ok ? "ok" : "danger"}"><b>${health.ok ? "同步正常" : "需要注意"}</b><span>${escapeHtml(health.summary)}</span></div>
+    <ul class="health-list">${health.items.map((item) => `<li class="${item.ok ? "ok" : "danger"}"><span>${escapeHtml(item.label)}</span><b>${escapeHtml(item.value)}</b></li>`).join("")}</ul>
+  `;
+}
+function inspectGameHealth(game, room) {
+  const allCards = [];
+  for (const hand of listFromFirebase(game?.hands || [])) for (const c of listFromFirebase(hand)) allCards.push(c?.id);
+  for (const p of listFromFirebase(game?.currentTrick)) allCards.push(p?.card?.id);
+  for (const p of listFromFirebase(game?.pendingTrick?.plays)) allCards.push(p?.card?.id);
+  for (const trick of listFromFirebase(game?.trickHistory)) for (const p of listFromFirebase(trick?.plays)) allCards.push(p?.card?.id);
+  const ids = allCards.filter(Boolean);
+  const unique = new Set(ids);
+  const dupes = ids.filter((id, idx) => ids.indexOf(id) !== idx);
+  const seatsFilled = [0, 1, 2, 3].filter((seat) => room?.lobby?.seats?.[seat]).length;
+  const phaseOk = ["auction", "openingLead", "play", "trickPause", "scoring"].includes(game?.phase);
+  const turnOk = game?.phase === "scoring" || (Number.isInteger(game?.currentPlayer) && game.currentPlayer >= 0 && game.currentPlayer <= 3);
+  const cardOk = ids.length === 52 && unique.size === 52;
+  const items = [
+    { label: "座位", ok: seatsFilled === 4, value: `${seatsFilled}/4 已就位` },
+    { label: "牌張", ok: cardOk, value: `${ids.length}/52 張，唯一 ${unique.size}/52${dupes.length ? `，重複 ${[...new Set(dupes)].join(",")}` : ""}` },
+    { label: "階段", ok: phaseOk, value: game?.phase || "未知" },
+    { label: "輪到", ok: turnOk, value: game?.phase === "scoring" ? "已結束" : `${SEATS[game?.currentPlayer]?.key || "?"} ${seatName(game?.currentPlayer)}` },
+    { label: "房間", ok: Boolean(room?.meta?.code || appState.offline), value: room?.meta?.code || (appState.offline ? "離線局" : "未知") }
+  ];
+  const ok = items.every((i) => i.ok);
+  return { ok, summary: ok ? "牌張、階段、輪到者與座位狀態看起來正常。" : "偵測到可能的同步或資料問題，可重新整理或請房主重新開局。", items };
+}
+function currentReviewText(game = currentGame()) {
+  if (!game) return "尚未有牌局。";
+  const review = contractReviewSummary(game);
+  return [`牌局檢討｜${BUILD}`, review.title, review.subtitle, review.badge, ...review.detail.map((x) => `- ${x}`)].join("\n");
+}
+async function copyCurrentReview() {
+  await copyText(currentReviewText(currentGame()));
+  toast("已複製牌局檢討");
+}
+function downloadTextFile(filename, text) {
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 800);
+}
+function downloadCurrentHandRecord() {
+  const game = currentGame();
+  const roomCode = appState.room?.meta?.code || "offline";
+  const board = game?.boardNo ? `board-${game.boardNo}` : "current";
+  downloadTextFile(`bridge-${roomCode}-${board}.txt`, handRecordText(game, appState.room));
+  toast("已下載完整牌譜 TXT");
 }
 function auctionTableHtml(game) {
   const auction = listFromFirebase(game.auction);

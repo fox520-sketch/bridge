@@ -415,12 +415,18 @@
         <section class="record-panel game-tools-panel">
           <h3>牌局工具</h3>
           <p class="hint compact">可複製完整牌譜，方便分享、回報問題或賽後檢討。</p>
-          <div class="button-row"><button id="btnCopyHandRecordGame" class="ghost" type="button">複製完整牌譜</button></div>
+          <div class="button-row">
+            <button id="btnCopyHandRecordGame" class="ghost" type="button">複製完整牌譜</button>
+            <button id="btnDownloadHandRecordGame" class="ghost" type="button">下載 TXT</button>
+            <button id="btnCopyReviewGame" class="ghost" type="button">複製檢討</button>
+          </div>
         </section>
         <section class="record-panel">
           <h3>叫牌紀錄表</h3>
           <div id="auctionRecord" class="record-scroll" aria-live="polite"></div>
         </section>
+        <section id="postHandReview" class="record-panel review-panel" aria-live="polite"></section>
+        <section id="gameHealthPanel" class="record-panel health-panel" aria-live="polite"></section>
         <section class="record-panel">
           <h3>每墩出牌紀錄</h3>
           <div id="trickRecord" class="record-scroll" aria-live="polite"></div>
@@ -472,6 +478,7 @@
         <p class="eyebrow">Release</p>
         <h2>本版更新</h2>
         <ul>
+          <li>新增「牌局檢討」與「牌局健康檢查」，可在牌局中即時查看合約方是否達標、牌張同步是否正常，並可下載 TXT 牌譜。</li>
           <li>新增「等待狀態」卡：顯示目前輪到誰、真人 / AI / 離線狀態，以及 AI 思考或清桌倒數。</li>
           <li>房主新增「接管目前輪到者」，只接管正在卡住的離線真人座位。</li>
           <li>牌局畫面每秒刷新局勢摘要、玩家在線狀態與桌面倒數，手機上更容易判斷現在在等誰。</li>
@@ -585,6 +592,8 @@
         <div class="result-buttons">
           <button id="resultReplay" class="ghost" type="button">牌局回放</button>
           <button id="resultCopyHandRecord" class="ghost" type="button">複製牌譜</button>
+          <button id="resultDownloadHandRecord" class="ghost" type="button">下載牌譜</button>
+          <button id="resultCopyReview" class="ghost" type="button">複製檢討</button>
           <button id="resultNewDeal" class="ghost" type="button">再玩一副</button>
           <button id="resultClose" class="primary" type="button">繼續</button>
         </div>
