@@ -1,3 +1,10 @@
+# v1.0.24.5
+
+- 以 v1.0.24.4 為基礎。
+- 遊戲模式預設維持「變體模式：四手暗牌」。
+- 加入 cache-reset.html，方便清除卡在 v1.0.24.3 的舊 Service Worker / Cache。
+- 強化 app.js / style.css / service-worker cache-busting。
+
 
 
 ## v1.0.24.4-default-closed-mode

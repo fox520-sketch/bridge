@@ -1,4 +1,4 @@
-const BUILD = "bridge-v1.0.24.4-default-closed-mode";
+const BUILD = "bridge-v1.0.24.5-cache-reset-default-closed";
 const ROOM_SCHEMA_VERSION = 65;
 const SEATS = [
   { id: 0, key: "N", name: "北", team: "NS" },
@@ -4126,13 +4126,16 @@ function registerServiceWorker() {
     location.reload();
   });
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js").then((registration) => {
-      if (registration.waiting && navigator.serviceWorker.controller) showUpdateBanner(registration.waiting);
+    navigator.serviceWorker.register("./service-worker.js?v=1.0.24.5", { updateViaCache: "none" }).then((registration) => {
+      registration.update().catch(() => {});
+      if (registration.waiting && navigator.serviceWorker.controller) {
+        registration.waiting.postMessage({ type: "SKIP_WAITING" });
+      }
       registration.addEventListener("updatefound", () => {
         const worker = registration.installing;
         if (!worker) return;
         worker.addEventListener("statechange", () => {
-          if (worker.state === "installed" && navigator.serviceWorker.controller) showUpdateBanner(worker);
+          if (worker.state === "installed" && navigator.serviceWorker.controller) worker.postMessage({ type: "SKIP_WAITING" });
         });
       });
     }).catch((error) => console.warn("Service worker registration failed", error));
