@@ -1,5 +1,5 @@
-const BUILD = "bridge-v1.0.24.2-stable-rebased-v23";
-const ROOM_SCHEMA_VERSION = 67;
+const BUILD = "bridge-v1.0.24.3-start-fallback-v23";
+const ROOM_SCHEMA_VERSION = 65;
 const SEATS = [
   { id: 0, key: "N", name: "北", team: "NS" },
   { id: 1, key: "E", name: "東", team: "EW" },
@@ -1038,7 +1038,7 @@ async function hostUpdatePacingFromGame() {
   await updateRoom({ "lobby/settings": settings, "meta/updatedAt": Date.now() });
   toast(`遊戲節奏已改為 ${delaySecondsLabel(ms)}`);
 }
-async function updateRoom(patch) {
+async function updateRoom(patch, options = {}) {
   if (appState.offline) {
     for (const [path, value] of Object.entries(patch)) setDeep(appState.room, path, value);
     renderAll();
@@ -1056,11 +1056,44 @@ async function updateRoom(patch) {
     rootPatch[`${roomPath()}/game`] = publicGameFromFull(fullGame);
     const privatePayload = privateHandPayloadFromGame(fullGame);
     for (let seat = 0; seat < 4; seat++) rootPatch[`${privateHandsPath()}/${seat}`] = privatePayload[seat];
-    await appState.firebase.update(appState.firebase.ref(appState.firebase.db), rootPatch);
-    return;
+    try {
+      await appState.firebase.update(appState.firebase.ref(appState.firebase.db), rootPatch);
+      return;
+    } catch (error) {
+      const message = (error && (error.message || error.code) ? `${error.code || ""} ${error.message || ""}` : String(error || "")).toLowerCase();
+      const canFallback = options.allowLegacyPublicGameFallback !== false && (message.includes("permission") || message.includes("denied") || message.includes("PERMISSION_DENIED".toLowerCase()));
+      if (!canFallback) throw error;
+      console.warn("secure private-hand write failed; falling back to legacy public game state", error);
+      await updateRoomLegacyPublicGame(patch, fullGame, error);
+      return;
+    }
   }
   await appState.firebase.update(appState.firebase.ref(appState.firebase.db, roomPath()), patch);
 }
+
+async function updateRoomLegacyPublicGame(patch, fullGame, originalError) {
+  const legacyPatch = {};
+  for (const [path, value] of Object.entries(patch)) {
+    if (path === "game") continue;
+    legacyPatch[path] = value;
+  }
+  const legacyGame = normalizeGame(structuredCloneCompat(fullGame));
+  legacyGame.security = {
+    ...(legacyGame.security || {}),
+    design: "legacy-public-hands-fallback",
+    warning: "Firebase rules did not allow roomPrivateHands writes, so this room started with legacy public hands. Update database.rules.json to restore anti-cheat split hands.",
+    originalError: String(originalError?.message || originalError?.code || originalError || "permission denied"),
+    build: BUILD,
+    at: Date.now()
+  };
+  legacyPatch.game = legacyGame;
+  legacyPatch["meta/securityFallback"] = "legacy-public-hands";
+  legacyPatch["meta/securityFallbackAt"] = Date.now();
+  legacyPatch["meta/securityFallbackBuild"] = BUILD;
+  await appState.firebase.update(appState.firebase.ref(appState.firebase.db, roomPath()), legacyPatch);
+  toast("已用相容模式開始；建議同步更新 Firebase rules 以恢復防作弊手牌拆分。", 5200);
+}
+
 function setDeep(obj, path, value) {
   const parts = path.split("/");
   let target = obj;
@@ -1423,37 +1456,55 @@ function isHostOrArbiter() { return isHost() || isArbiter(); }
 function isMySeat(seat) { return findSeatByUid(appState.room, appState.uid) === Number(seat); }
 
 async function hostStartGame() {
-  if (!appState.room) return;
-  if (!appState.offline && !isHost()) return toast("只有房主可以開始");
-  const room = structuredCloneCompat(appState.room);
-  const settings = room.lobby?.settings || {};
-  const emptySeats = [0, 1, 2, 3].filter((seat) => !room.lobby.seats[seat]);
-  if (emptySeats.length && settings.allowBotFill === false) return toast("目前關閉 AI 補位，請等四位玩家就座或重新開啟 AI 補位");
-  if (!appState.offline && room.meta?.status === "lobby") {
-    const humans = [0, 1, 2, 3].map((seat) => room.lobby.seats[seat]).filter((p) => p?.type === "human");
-    const unready = humans.filter((p) => p.ready === false || p.ready == null);
-    if (unready.length) toast(`提醒：${unready.length} 位真人尚未按準備，房主仍可開局。`);
+  const startBtn = $("btnStartGame");
+  const oldLabel = startBtn?.textContent || "開始對戰";
+  try {
+    if (!appState.room) return toast("尚未建立或加入房間");
+    if (!appState.offline && !isHost()) return toast("只有房主可以開始");
+    if (startBtn) { startBtn.disabled = true; startBtn.textContent = "開始中…"; }
+    const room = structuredCloneCompat(appState.room);
+    room.lobby ||= { seats: {}, settings: defaultSettingsFromUI("lobby"), dealer: 2, boardNo: 1 };
+    room.lobby.seats ||= {};
+    room.lobby.settings ||= defaultSettingsFromUI("lobby");
+    const settings = room.lobby?.settings || {};
+    const emptySeats = [0, 1, 2, 3].filter((seat) => !room.lobby.seats[seat]);
+    if (emptySeats.length && settings.allowBotFill === false) return toast("目前關閉 AI 補位，請等四位玩家就座或重新開啟 AI 補位");
+    if (!appState.offline && room.meta?.status === "lobby") {
+      const humans = [0, 1, 2, 3].map((seat) => room.lobby.seats[seat]).filter((p) => p?.type === "human");
+      const unready = humans.filter((p) => p.ready === false || p.ready == null);
+      if (unready.length) toast(`提醒：${unready.length} 位真人尚未按準備，房主仍可開局。`);
+    }
+    for (let seat = 0; seat < 4; seat++) {
+      if (!room.lobby.seats[seat]) room.lobby.seats[seat] = makeSeat(seat, `bot-${seat}-${Date.now()}`, `${SEATS[seat].name}方電腦`, "bot");
+      if (room.lobby.seats[seat]?.type === "bot") room.lobby.seats[seat].ready = true;
+    }
+    room.match = prepareMatchForNextGame(room);
+    const game = createNewGame(room);
+    const nextDealer = (game.dealer + 1) % 4;
+    const patch = {
+      "meta/status": "game",
+      "meta/updatedAt": Date.now(),
+      "lobby/seats": room.lobby.seats,
+      "lobby/dealer": nextDealer,
+      "lobby/boardNo": game.boardNo + 1,
+      match: room.match,
+      game,
+      actions: null,
+      actionAudit: null
+    };
+    await updateRoom(patch, { allowLegacyPublicGameFallback: true });
+    $("resultOverlay")?.classList.add("hidden");
+    playSfx("start");
+    toast("牌局已開始");
+  } catch (error) {
+    console.error("hostStartGame failed", error);
+    const detail = error?.message || error?.code || String(error || "未知錯誤");
+    const notice = $("lobbyNotice");
+    if (notice) notice.textContent = `開始對戰失敗：${detail}。若是 permission_denied，請同步更新 Firebase Database Rules，或使用這版的相容模式重試。`;
+    toast(`開始對戰失敗：${detail}`, 6500);
+  } finally {
+    if (startBtn) { startBtn.disabled = false; startBtn.textContent = oldLabel; }
   }
-  for (let seat = 0; seat < 4; seat++) {
-    if (!room.lobby.seats[seat]) room.lobby.seats[seat] = makeSeat(seat, `bot-${seat}-${Date.now()}`, `${SEATS[seat].name}方電腦`, "bot");
-  }
-  room.match = prepareMatchForNextGame(room);
-  const game = createNewGame(room);
-  const nextDealer = (game.dealer + 1) % 4;
-  const patch = {
-    "meta/status": "game",
-    "meta/updatedAt": Date.now(),
-    "lobby/seats": room.lobby.seats,
-    "lobby/dealer": nextDealer,
-    "lobby/boardNo": game.boardNo + 1,
-    match: room.match,
-    game,
-    actions: null,
-    actionAudit: null
-  };
-  await updateRoom(patch);
-  $("resultOverlay").classList.add("hidden");
-  playSfx("start");
 }
 function createNewGame(room) {
   const deck = shuffle(makeDeck());

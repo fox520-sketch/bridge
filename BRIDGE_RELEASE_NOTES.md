@@ -185,6 +185,10 @@
 - 舊拿破崙規則與 5 人座位邏輯已移除。
 
 
-## v1.0.24.2 stable rebase
+## v1.0.24.3 start fallback hotfix
 
-此版改用 v1.0.23 穩定版為基底重新打包，先恢復啟動、版本資訊與主要按鈕操作。v1.0.24 中造成啟動中斷的新增模組暫不併入；本版額外加入 app/style/manifest 的 cache-busting 參數與新版 service worker 快取名稱，降低 GitHub Pages / PWA 舊快取影響。
+- Rebased from the stable v1.0.23 line.
+- Fixed multiplayer Start Game failure diagnostics.
+- If Firebase rules still do not allow `roomPrivateHands` writes, the host will fall back to a legacy public-hands compatibility mode and show a warning instead of silently failing.
+- Added visible failure messages in the lobby when start fails.
+- Updated cache version and cache-busting query strings.
