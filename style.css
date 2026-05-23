@@ -866,3 +866,98 @@ button .suit-symbol.black,
   .hand-panel { position: sticky; bottom: env(safe-area-inset-bottom); z-index: 20; }
   .card { padding-bottom: calc(1rem + env(safe-area-inset-bottom)); }
 }
+
+/* v1.0.24 debug / bidding / replay / stats / mobile refinements */
+.debug-recorder-card {
+  border: 1px dashed rgba(8, 126, 164, 0.45);
+}
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.45rem;
+  margin-bottom: 0.75rem;
+}
+.stat-grid span {
+  display: block;
+  padding: 0.5rem 0.6rem;
+  border-radius: 0.8rem;
+  background: rgba(255,255,255,0.55);
+  border: 1px solid rgba(0,0,0,0.06);
+}
+.history-list ul {
+  margin: 0.4rem 0 0;
+  padding-left: 1rem;
+}
+.history-list li {
+  margin: 0.25rem 0;
+}
+.history-list li span {
+  display: block;
+  font-size: 0.78rem;
+  opacity: 0.75;
+}
+.replay-speed-field {
+  min-width: 110px;
+}
+.replay-coach-card {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border-radius: 1rem;
+  background: rgba(255,255,255,0.58);
+  border: 1px solid rgba(0,0,0,0.07);
+}
+.replay-legal-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.45rem 0;
+}
+body.confirm-play-mode .card-face.playable:not(.selected) {
+  outline: 2px solid rgba(8,126,164,.3);
+}
+@media (max-width: 760px) {
+  body:not(.confirm-play-mode) .hand .card-face.playable {
+    transform: translateY(-7px);
+  }
+  .auction-controls .bid-grid {
+    grid-template-columns: repeat(5, minmax(3.15rem, 1fr));
+    gap: 0.45rem;
+  }
+  .auction-controls .bid-button,
+  .auction-controls .call-row button,
+  .hand-panel button,
+  .result-buttons button {
+    min-height: 48px;
+    font-size: 1rem;
+    touch-action: manipulation;
+  }
+  .hand-panel {
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+  }
+  .hand {
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+  }
+  .hand .card-face {
+    scroll-snap-align: center;
+  }
+  .replay-step-controls {
+    gap: 0.4rem;
+  }
+  .replay-step-controls button,
+  .replay-step-controls select {
+    min-height: 44px;
+  }
+}
+@media (orientation: landscape) and (max-height: 520px) {
+  .game {
+    padding-bottom: calc(120px + env(safe-area-inset-bottom));
+  }
+  .hand-panel {
+    max-height: 42vh;
+  }
+  .table {
+    min-height: 58vh;
+  }
+}
