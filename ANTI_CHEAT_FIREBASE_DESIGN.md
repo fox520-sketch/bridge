@@ -1,4 +1,4 @@
-# v1.0.23 防作弊與測試補充
+# v1.0.24 防作弊、Debug 與測試補充
 
 本版在既有 `rooms/{code}/game` 公開狀態與 `roomPrivateHands/{code}/{seat}` 私人手牌拆分基礎上，新增「座位視角模擬」與「Firebase 部署檢查器」。
 
@@ -81,3 +81,8 @@ roomUndo/{code}
 - `meta.hostUid` / `meta.arbiterUid` 由交易式房主轉移流程寫入，UI 會顯示房主與仲裁者並保留 `hostTransferLog`。
 
 仍需注意：這是純前端仲裁的最強化版本之一，房主瀏覽器仍被信任；若要競賽級防作弊，請將 action 驗證移到 Cloud Functions 或自有伺服器。
+
+
+## v1.0.24 補充
+
+新增 debug-report.json 實戰測試紀錄器、叫牌制度選項、逐墩回放升級、牌局歷史與手機操作細修。
