@@ -1,3 +1,13 @@
+# 合約橋牌版本紀錄
+
+## v1.0.15-wait-countdown-offline-control
+
+- 新增等待狀態卡：顯示目前行動者、真人 / AI / 離線狀態、AI 思考或收牌倒數。
+- 遊戲畫面每秒刷新局勢摘要、房間玩家狀態、桌面目前最大牌與收牌倒數。
+- 房主新增「接管目前輪到者」，方便只處理卡住的離線座位。
+- 清理右側牌局紀錄重複摘要。
+- 更新 Service Worker 快取版本為 `contract-bridge-v1-0-15-wait-countdown-offline-control`。
+
 # Bridge Firebase Game Release Notes
 
 ## v1.0.14-turn-alert-ingame-coach

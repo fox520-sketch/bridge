@@ -351,6 +351,7 @@
           <div id="scoreList"></div>
         </div>
         <div id="dealProgress" class="deal-progress-card"></div>
+        <div id="turnWaitCard" class="wait-card hidden" aria-live="polite"></div>
         <div id="actionPanel" class="actions"></div>
         <div id="gameRoomStatus" class="room-status-card game-room-status hidden" aria-live="polite"></div>
         <div id="gameHostTools" class="host-tools host-only hidden">
@@ -369,7 +370,8 @@
             </label>
           </div>
           <div class="button-row">
-            <button id="btnTakeOverOfflineGame" class="ghost" type="button">接管離線玩家</button>
+            <button id="btnTakeOverCurrentGame" class="ghost" type="button">接管目前輪到者</button>
+            <button id="btnTakeOverOfflineGame" class="ghost" type="button">接管全部離線玩家</button>
             <button id="btnCopyLinkGame" class="ghost" type="button">複製邀請連結</button>
             <button id="btnCloseRoomGame" class="ghost danger-ghost" type="button">關閉房間</button>
           </div>
@@ -470,6 +472,9 @@
         <p class="eyebrow">Release</p>
         <h2>本版更新</h2>
         <ul>
+          <li>新增「等待狀態」卡：顯示目前輪到誰、真人 / AI / 離線狀態，以及 AI 思考或清桌倒數。</li>
+          <li>房主新增「接管目前輪到者」，只接管正在卡住的離線真人座位。</li>
+          <li>牌局畫面每秒刷新局勢摘要、玩家在線狀態與桌面倒數，手機上更容易判斷現在在等誰。</li>
           <li>新增「輪到你」醒目提示列，輪到叫牌或出牌時會音效/震動提醒，並可一鍵跳到操作區。</li>
           <li>新增教練建議：輪到你時會提示建議叫品或建議出牌，也可一鍵套用。</li>
           <li>房主可在牌局中調整本局節奏，也能直接複製邀請連結。</li>

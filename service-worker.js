@@ -1,4 +1,4 @@
-const CACHE_NAME = "contract-bridge-v1-0-14-turn-alert-ingame-coach";
+const CACHE_NAME = "contract-bridge-v1-0-15-wait-countdown-offline-control";
 const ASSETS = [
   "./",
   "./index.html",

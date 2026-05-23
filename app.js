@@ -1,5 +1,5 @@
-const BUILD = "bridge-v1.0.14-turn-alert-ingame-coach";
-const ROOM_SCHEMA_VERSION = 57;
+const BUILD = "bridge-v1.0.15-wait-countdown-offline-control";
+const ROOM_SCHEMA_VERSION = 58;
 const SEATS = [
   { id: 0, key: "N", name: "北", team: "NS" },
   { id: 1, key: "E", name: "東", team: "EW" },
@@ -70,7 +70,8 @@ const appState = {
   lastResultKey: null,
   processingActions: false,
   lastTurnNoticeKey: null,
-  updateWorker: null
+  updateWorker: null,
+  uiTicker: null
 };
 
 function init() {
@@ -103,6 +104,7 @@ function init() {
 
   bindEvents();
   if (appState.pendingInviteRoom) setTimeout(autoJoinInviteRoom, 250);
+  startUiTicker();
   renderLocalStatsSummary();
   renderReleaseChecklist();
   $("versionFooter").textContent = `合約橋牌 ${BUILD}｜標準夢家／閉手變體｜Firebase 多人房間`;
@@ -141,6 +143,7 @@ function bindEvents() {
   $("btnStartGame").addEventListener("click", hostStartGame);
   $("btnTakeOverOfflineLobby").addEventListener("click", hostTakeOverOfflinePlayers);
   $("btnTakeOverOfflineGame").addEventListener("click", hostTakeOverOfflinePlayers);
+  $("btnTakeOverCurrentGame")?.addEventListener("click", hostTakeOverCurrentOfflinePlayer);
   $("btnExtendRoomLobby").addEventListener("click", hostExtendRoom);
   $("btnCopyRoomMaintenanceLobby").addEventListener("click", copyRoomMaintenanceSummary);
   $("btnCloseRoomLobby").addEventListener("click", hostCloseRoom);
@@ -323,6 +326,26 @@ async function autoJoinInviteRoom() {
   setStatus(`正在透過邀請連結加入房間 ${code}…`);
   await joinRoomByCode(code, false, true);
 }
+function startUiTicker() {
+  if (appState.uiTicker) clearInterval(appState.uiTicker);
+  appState.uiTicker = setInterval(renderTemporalHud, 1000);
+}
+
+function renderTemporalHud() {
+  const room = appState.room;
+  if (!room || room.meta?.status !== "game" || !room.game) return;
+  try {
+    normalizeGame(room.game);
+    renderPhase(room.game);
+    renderDealProgress(room.game, room);
+    renderTurnWaitCard(room);
+    renderGameRoomStatus(room);
+    renderTable(room);
+  } catch (error) {
+    console.warn("temporal HUD refresh failed", error);
+  }
+}
+
 function roomPath(code = appState.roomCode) { return `rooms/${code}`; }
 function actionsPath(code = appState.roomCode) { return `rooms/${code}/actions`; }
 
@@ -701,6 +724,22 @@ async function hostTakeOverOfflinePlayers() {
   if (!count) return toast("沒有離線真人座位可接管");
   await updateRoom(patch);
   toast(`已接管 ${count} 個座位`);
+}
+
+async function hostTakeOverCurrentOfflinePlayer() {
+  if (!isHost()) return toast("只有房主可以接管");
+  const room = appState.room;
+  const game = room?.game;
+  if (!game || room?.meta?.status !== "game") return toast("目前沒有進行中的牌局");
+  const info = currentWaitInfo(game, room);
+  const seat = info.controllerSeat;
+  const player = room?.lobby?.seats?.[seat];
+  if (!info.canTakeOver || seat == null || !player) return toast("目前輪到的座位不是離線真人");
+  await updateRoom({
+    [`lobby/seats/${seat}`]: makeSeat(seat, `bot-current-${seat}-${Date.now()}`, `${SEATS[seat].name}方代打`, "bot"),
+    "meta/updatedAt": Date.now()
+  });
+  toast(`已讓電腦接管 ${seatName(seat)}`);
 }
 async function hostExtendRoom() {
   if (!isHost()) return;
@@ -1304,6 +1343,7 @@ function renderGame(room) {
   renderRecords(game);
   renderGameRoomStatus(room);
   renderDealProgress(game, room);
+  renderTurnWaitCard(room);
   renderTurnAlert(room);
   renderLog(game);
   updateBrowserTitle(game, room);
@@ -1320,7 +1360,9 @@ function renderPhase(game) {
   };
   const [title, help] = phaseMap[game.phase] || ["準備中", "等待同步。"];
   $("phaseTitle").textContent = title;
-  $("phaseHelp").innerHTML = colorizeSuitsHtml(help);
+  const wait = currentWaitInfo(game, appState.room);
+  const extra = wait?.detail && game.phase !== "scoring" ? `<br><span class="phase-wait-note">${escapeHtml(wait.detail)}</span>` : "";
+  $("phaseHelp").innerHTML = colorizeSuitsHtml(help) + extra;
 }
 function renderContract(game) {
   const lines = [];
@@ -1368,20 +1410,112 @@ function renderDealProgress(game, room) {
     goalText = `${declaringTeam} 目標 ${target} 墩，目前 ${effective}，還差 ${need}。`;
   }
   const turnText = phaseTurnText(game, room);
+  const waitInfo = currentWaitInfo(game, room);
+  const waitLine = waitInfo.detail ? `<br>${escapeHtml(waitInfo.detail)}` : "";
   el.innerHTML = `
     <h3>局勢摘要</h3>
     <div class="progress-line"><span>${escapeHtml(turnText)}</span><b>${progressCards}/52</b></div>
     <div class="deal-progress-bar" aria-hidden="true"><i style="width:${progressPct}%"></i></div>
-    <p class="hint compact">${escapeHtml(goalText)}剩餘約 ${remainingTricks} 墩。節奏：${pacingLabel(room?.lobby?.settings)}。</p>
+    <p class="hint compact">${escapeHtml(goalText)}剩餘約 ${remainingTricks} 墩。節奏：${pacingLabel(room?.lobby?.settings)}。${waitLine}</p>
   `;
 }
 function phaseTurnText(game, room) {
-  if (game.phase === "auction") return `輪到 ${seatName(game.currentPlayer)} 叫牌`;
-  if (game.phase === "openingLead") return `輪到 ${seatName(game.currentPlayer)} 首攻`;
-  if (game.phase === "play") return `輪到 ${seatName(game.currentPlayer)} 出牌`;
-  if (game.phase === "trickPause") return `本墩完成，${seatName(game.pendingTrick?.winner ?? game.currentPlayer)} 將收牌`;
+  const wait = currentWaitInfo(game, room);
+  if (game.phase === "auction") return `輪到 ${seatName(game.currentPlayer)} 叫牌${wait.countdownText ? `｜${wait.countdownText}` : ""}`;
+  if (game.phase === "openingLead") return `輪到 ${seatName(game.currentPlayer)} 首攻${wait.countdownText ? `｜${wait.countdownText}` : ""}`;
+  if (game.phase === "play") return `輪到 ${seatName(game.currentPlayer)} 出牌${wait.countdownText ? `｜${wait.countdownText}` : ""}`;
+  if (game.phase === "trickPause") return `本墩完成，${seatName(game.pendingTrick?.winner ?? game.currentPlayer)} 將收牌${wait.countdownText ? `｜${wait.countdownText}` : ""}`;
   if (game.phase === "scoring") return "本副已結算";
   return room?.meta?.status === "game" ? "牌局進行中" : "等待開始";
+}
+
+function secondsLeft(targetAt) {
+  const ms = Number(targetAt || 0) - Date.now();
+  return Math.max(0, Math.ceil(ms / 1000));
+}
+
+function currentWaitInfo(game, room = appState.room) {
+  const settings = room?.lobby?.settings || {};
+  const actionSeat = game?.currentPlayer ?? null;
+  const controllerSeat = game ? controllingSeatForCurrentAction(game) : null;
+  const player = controllerSeat != null ? room?.lobby?.seats?.[controllerSeat] : null;
+  const state = playerPresenceState(player);
+  let title = "等待同步";
+  let detail = "";
+  let countdownText = "";
+  let kind = "idle";
+  if (!game) return { actionSeat, controllerSeat, player, state, title, detail, countdownText, kind, canTakeOver: false };
+  if (game.phase === "trickPause" && game.pendingTrick) {
+    const left = secondsLeft(game.pendingTrick.clearAt);
+    title = `本墩完成，${seatName(game.pendingTrick.winner)} 贏得本墩`;
+    detail = `桌面保留中，約 ${left} 秒後收牌。`;
+    countdownText = `${left} 秒後收牌`;
+    kind = "pause";
+  } else if (["auction", "openingLead", "play"].includes(game.phase)) {
+    const actionLabel = game.phase === "auction" ? "叫牌" : game.phase === "openingLead" ? "首攻" : "出牌";
+    const controlledText = controllerSeat !== actionSeat ? `由 ${seatName(controllerSeat)} 指揮 ${seatName(actionSeat)} 的夢家牌` : `${seatName(actionSeat)} ${actionLabel}`;
+    title = `輪到 ${controlledText}`;
+    if (player?.type === "bot") {
+      const dueAt = Number(game.updatedAt || Date.now()) + getAiActionDelayMs(settings);
+      const left = secondsLeft(dueAt);
+      detail = `AI 模擬思考中，約 ${left} 秒後自動${actionLabel}。`;
+      countdownText = `AI 約 ${left} 秒`;
+      kind = "bot";
+    } else if (player?.type === "human" && isPlayerOffline(player)) {
+      detail = `${player.name || seatName(controllerSeat)} 目前離線；房主可接管目前輪到的座位，讓電腦代打。`;
+      countdownText = "真人離線";
+      kind = "offline";
+    } else if (player?.type === "human") {
+      detail = `等待 ${player.name || seatName(controllerSeat)} 操作。${state.detail ? `最後同步：${state.detail}。` : ""}`;
+      countdownText = "等待真人";
+      kind = "human";
+    } else {
+      detail = "等待座位資料同步。";
+      countdownText = "等待同步";
+      kind = "sync";
+    }
+  } else if (game.phase === "scoring") {
+    title = "本副已結束";
+    detail = game.result?.summary || "已結算。";
+    kind = "scoring";
+  }
+  const canTakeOver = Boolean(kind === "offline" && isHost() && player?.type === "human" && player.uid !== appState.uid);
+  return { actionSeat, controllerSeat, player, state, title, detail, countdownText, kind, canTakeOver };
+}
+
+function renderTurnWaitCard(room) {
+  const el = $("turnWaitCard");
+  if (!el) return;
+  const game = room?.game;
+  if (!game || game.phase === "scoring") {
+    el.classList.add("hidden");
+    el.innerHTML = "";
+    updateCurrentTakeoverButton(null);
+    return;
+  }
+  const info = currentWaitInfo(game, room);
+  updateCurrentTakeoverButton(info);
+  const playerName = info.player?.name || (info.controllerSeat != null ? seatName(info.controllerSeat) : "未知");
+  const stateLabel = info.player ? info.state.label : "等待";
+  const stateClass = info.state.className || "empty";
+  const countdown = info.countdownText ? `<strong class="wait-countdown ${escapeHtml(info.kind)}">${escapeHtml(info.countdownText)}</strong>` : "";
+  const takeover = info.canTakeOver ? `<button class="ghost tiny" type="button" data-takeover-current="1">接管此座位</button>` : "";
+  el.className = `wait-card ${info.kind}`;
+  el.innerHTML = `
+    <div class="wait-card-head"><h3>等待狀態</h3>${countdown}</div>
+    <p><b>${escapeHtml(info.title)}</b></p>
+    <p class="hint compact">${escapeHtml(info.detail || "等待同步。")}</p>
+    <div class="wait-meta"><span>${info.controllerSeat != null ? SEATS[info.controllerSeat].key : "?"} ${escapeHtml(playerName)}</span><span class="presence-pill ${stateClass}">${escapeHtml(stateLabel)}</span>${takeover}</div>
+  `;
+  el.querySelector("[data-takeover-current]")?.addEventListener("click", hostTakeOverCurrentOfflinePlayer);
+}
+
+function updateCurrentTakeoverButton(info) {
+  const btn = $("btnTakeOverCurrentGame");
+  if (!btn) return;
+  const currentInfo = info || (appState.room?.game ? currentWaitInfo(appState.room.game, appState.room) : null);
+  btn.disabled = !currentInfo?.canTakeOver;
+  btn.title = currentInfo?.canTakeOver ? `接管 ${seatName(currentInfo.controllerSeat)}` : "目前輪到的座位不是離線真人";
 }
 function updateBrowserTitle(game, room) {
   const mySeat = findSeatByUid(room, appState.uid, appState.clientId);
@@ -1505,6 +1639,7 @@ function renderGameRoomStatus(room) {
   if (!appState.offline) el.innerHTML = renderPresenceStatusHtml(room, true);
   const gamePacing = $("gamePacing");
   if (gamePacing) gamePacing.value = sanitizePacingMs(room?.lobby?.settings?.pacingMs || AI_ACTION_DELAY_MS);
+  updateCurrentTakeoverButton(room?.game ? currentWaitInfo(room.game, room) : null);
 }
 function renderPresenceStatusHtml(room, compact = false) {
   const rows = [0, 1, 2, 3].map((seat) => {
@@ -1571,7 +1706,7 @@ function renderTable(room) {
     playEl.innerHTML = play ? cardHtml(play.card, { small: false, winning: isWinningCard }) : "";
   }
   const liveWinner = currentWinningPlay(game.currentTrick || [], game.contract?.suit);
-  $("trickArea").innerHTML = game.phase === "trickPause" && game.pendingTrick ?  `<span class="pill winning-pill">本墩完成｜${seatName(game.pendingTrick.winner)} 贏，${pacingLabel(room.lobby?.settings)}後清桌</span>` : (game.currentTrick?.length ? `<span class="pill winning-pill">本墩 ${game.currentTrick.length}/4｜目前最大：${seatName(liveWinner?.seat)} ${liveWinner?.card ? cardTextHtml(liveWinner.card) : ""}</span>` : `<span class="pill">等待出牌</span>`);
+  $("trickArea").innerHTML = game.phase === "trickPause" && game.pendingTrick ?  `<span class="pill winning-pill">本墩完成｜${seatName(game.pendingTrick.winner)} 贏，${currentWaitInfo(game, room).countdownText || "即將清桌"}</span>` : (game.currentTrick?.length ? `<span class="pill winning-pill">本墩 ${game.currentTrick.length}/4｜目前最大：${seatName(liveWinner?.seat)} ${liveWinner?.card ? cardTextHtml(liveWinner.card) : ""}</span>` : `<span class="pill">等待出牌</span>`);
   $("kittyArea").innerHTML = game.phase === "auction" ? auctionSummaryHtml(game.auction) : "";
 }
 function isSeatHandVisible(game, seat, mySeat) {
@@ -1736,7 +1871,8 @@ function renderActions(room) {
   }
   if (["openingLead", "play"].includes(game.phase)) {
     const control = controllableSeatForViewer(game, mySeat);
-    const note = actionNote(control.canAct ? "請直接點手牌出牌。" : `等待 ${seatName(game.currentPlayer)} 出牌。`);
+    const wait = currentWaitInfo(game, room);
+    const note = actionNote(control.canAct ? "請直接點手牌出牌。" : `${wait.title}。${wait.detail || ""}`);
     panel.append(note);
     const sug = document.createElement("div");
     sug.innerHTML = renderPlayerSuggestion(game, control);
@@ -1744,7 +1880,8 @@ function renderActions(room) {
     return;
   }
   if (game.phase === "trickPause") {
-    panel.append(actionNote(`本墩已出完，保留桌面 ${pacingLabel(appState.room?.lobby?.settings)} 後自動收牌。`));
+    const wait = currentWaitInfo(game, room);
+    panel.append(actionNote(`本墩已出完，${wait.countdownText || `保留桌面 ${pacingLabel(appState.room?.lobby?.settings)}`}。`));
     return;
   }
   if (game.phase === "scoring") {

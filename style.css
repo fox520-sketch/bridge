@@ -483,3 +483,52 @@ button .suit-symbol.black,
   .turn-alert { position: sticky; top: 8px; z-index: 12; align-items: stretch; flex-direction: column; }
   .turn-alert .primary { width: 100%; }
 }
+
+/* v1.0.15: waiting countdown, current offline takeover, and live status refresh */
+.wait-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  margin: 12px 0;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--panel-strong), transparent 8%);
+  box-shadow: var(--shadow-soft);
+}
+.wait-card.hidden { display: none; }
+.wait-card-head, .wait-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.wait-card h3 { margin: 0; }
+.wait-card p { margin: 0; }
+.wait-countdown {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent), transparent 84%);
+  border: 1px solid color-mix(in srgb, var(--accent), transparent 55%);
+  color: var(--accent-strong);
+  font-variant-numeric: tabular-nums;
+}
+.wait-countdown.offline, .wait-card.offline .wait-countdown {
+  background: #fee2e2;
+  border-color: #fecaca;
+  color: var(--danger);
+}
+.wait-countdown.pause, .wait-card.pause .wait-countdown {
+  background: #fef3c7;
+  border-color: #fde68a;
+  color: #92400e;
+}
+.wait-meta span:first-child { font-weight: 900; color: var(--ink); }
+.phase-wait-note { color: var(--muted); font-size: .92rem; }
+@media (max-width: 720px) {
+  .wait-card { margin: 10px 0; padding: 10px; }
+  .wait-card-head, .wait-meta { align-items: stretch; flex-direction: column; }
+  .wait-card .ghost.tiny { width: 100%; }
+}
