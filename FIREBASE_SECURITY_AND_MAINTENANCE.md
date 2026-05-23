@@ -1,3 +1,14 @@
+# v1.0.23 Firebase 部署檢查
+
+新增遊戲內「Firebase 部署檢查器」，可協助測試：
+
+1. Anonymous Auth 是否能登入。
+2. Realtime Database 是否能建立臨時房間。
+3. `roomPrivateHands/{code}/{seat}` 基礎讀寫是否正常。
+4. `rooms/{code}/actions` 是否能提交座位 action。
+
+注意：單一瀏覽器無法偽裝第二個 `auth.uid`，因此「觀戰者不可讀私人手牌」與「非座位玩家不可提交 action」仍需用第二台裝置實測。
+
 # v1.0.22 更新重點
 
 - Firebase rules 正式強化：`database.rules.json` 已改成正式防作弊部署取向，分流公開房間資料、每席私人手牌、action queue、撤銷快照與房主 / 仲裁者權限。

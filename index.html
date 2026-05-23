@@ -229,6 +229,18 @@
         </div>
       </div>
 
+      <div class="tool-card deploy-test-card">
+        <div>
+          <h3>實機測試與部署檢查</h3>
+          <p class="hint">v1.0.23 新增四座位視角模擬與 Firebase 部署檢查器。可用一台裝置切換 N/E/S/W 視角，或檢查 Auth、Database、私人手牌與 action queue 基礎路徑。</p>
+          <div id="deploymentCheckStatus" class="diagnostic-status deploy-check-status">尚未執行 Firebase 部署檢查。</div>
+        </div>
+        <div class="tool-actions">
+          <button id="btnStartSeatSimulator" class="ghost" type="button">四人視角模擬</button>
+          <button id="btnRunFirebaseDeployCheck" class="ghost" type="button">Firebase 部署檢查</button>
+        </div>
+      </div>
+
       <h3 class="section-title">多人線上</h3>
       <div class="grid two">
         <label class="field">
@@ -277,6 +289,9 @@
           <h3>座位</h3>
           <p class="hint compact">四個座位固定為北、東、南、西；南北同隊，東西同隊。真人不足時可由房主補電腦。</p>
           <div id="lobbySeats" class="seat-list"></div>
+          <div class="button-row">
+            <button id="btnToggleReady" class="ghost" type="button">我準備好了</button>
+          </div>
           <div class="button-row host-only hidden">
             <button id="btnAddBot" class="ghost" type="button">補一位電腦</button>
             <button id="btnRemoveBot" class="ghost" type="button">移除電腦</button>
@@ -287,6 +302,8 @@
             <div class="button-row">
               <button id="btnTakeOverOfflineLobby" class="ghost" type="button">離線玩家改電腦</button>
               <button id="btnExtendRoomLobby" class="ghost" type="button">延長 24 小時</button>
+              <label class="mini-field compact-transfer"><span>轉讓房主</span><select id="transferHostSeat"></select></label>
+              <button id="btnTransferHost" class="ghost" type="button">轉讓房主</button>
               <button id="btnCopyRoomMaintenanceLobby" class="ghost" type="button">複製維護摘要</button>
               <button id="btnCloseRoomLobby" class="ghost danger-ghost" type="button">關閉房間</button>
             </div>
@@ -343,6 +360,7 @@
             </label>
             <label class="check"><input id="showAiThoughts" type="checkbox" checked /> 顯示 AI 思路紀錄</label>
             <label class="check"><input id="allowSpectators" type="checkbox" checked /> 開放觀戰加入</label>
+            <label class="check"><input id="allowBotFill" type="checkbox" checked /> 允許 AI 補位</label>
           </div>
           <button id="btnStartGame" class="primary big host-only hidden" type="button">開始對戰</button>
           <p id="lobbyNotice" class="hint"></p>
@@ -392,6 +410,18 @@
                 <option value="5000">5 秒｜教學慢速</option>
               </select>
             </label>
+          </div>
+          <div class="test-view-tools">
+            <b>座位視角模擬</b>
+            <div class="button-row compact-actions">
+              <button class="ghost tiny" type="button" data-test-view-seat="0">北 N</button>
+              <button class="ghost tiny" type="button" data-test-view-seat="1">東 E</button>
+              <button class="ghost tiny" type="button" data-test-view-seat="2">南 S</button>
+              <button class="ghost tiny" type="button" data-test-view-seat="3">西 W</button>
+              <button class="ghost tiny" type="button" data-test-view-seat="spectator">觀戰</button>
+              <button class="ghost tiny" type="button" data-test-view-seat="clear">關閉</button>
+            </div>
+            <p class="hint compact">四人視角模擬局可直接切換座位操作；線上局只建議用來檢查視角，不建議代替其他真人行動。</p>
           </div>
           <div class="button-row">
             <button id="btnTakeOverCurrentGame" class="ghost" type="button">接管目前輪到者</button>
@@ -536,7 +566,8 @@
         <p class="eyebrow">Release</p>
         <h2>本版更新</h2>
         <ul>
-          <li>v1.0.22：Firebase rules 正式強化，私人手牌、action queue 與房主/仲裁者權限分流更清楚。</li>
+          <li>v1.0.23：新增四人座位視角模擬、Firebase 部署檢查器、出牌 AI 第三版、正式大廳與新手教學第三章。</li>
+          <li class="old-note">v1.0.22：Firebase rules 正式強化，私人手牌、action queue 與房主/仲裁者權限分流更清楚。</li>
           <li>房主 / 仲裁者轉移再強化：房主離線超過安全等待時間後，新仲裁者用交易式寫入接手，降低雙房主風險。</li>
           <li>Chicago 可選 4 / 8 / 12 / 16 副，賽後報告會列出每副合約、結果、分數與累計分。</li>
           <li>新增新手教學任務第二章：合約與成局，練習看懂目標墩數、王牌/無王、成局與計分。</li>

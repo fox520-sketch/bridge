@@ -1,5 +1,5 @@
-const BUILD = "bridge-v1.0.22-rules-arbiter-chicago-tutorial-mobile";
-const ROOM_SCHEMA_VERSION = 64;
+const BUILD = "bridge-v1.0.23-test-deploy-ai3-lobby-tutorial";
+const ROOM_SCHEMA_VERSION = 65;
 const SEATS = [
   { id: 0, key: "N", name: "北", team: "NS" },
   { id: 1, key: "E", name: "東", team: "EW" },
@@ -41,7 +41,9 @@ const STORAGE = {
   clientId: "bridge.clientId",
   checklist: "bridge.releaseChecklist",
   tutorialChapter1: "bridge.tutorial.chapter1",
-  tutorialChapter2: "bridge.tutorial.chapter2"
+  tutorialChapter2: "bridge.tutorial.chapter2",
+  tutorialChapter3: "bridge.tutorial.chapter3",
+  testViewSeat: "bridge.testViewSeat"
 };
 const firebaseConfig = {
   apiKey: "AIzaSyDbOGwdYNY4mFG8Sgy8w_QdJpziWVoNx10",
@@ -88,7 +90,9 @@ const appState = {
   recordsDrawerOpen: false,
   mobileRecordTab: "tools",
   lastHostTransferAttemptAt: 0,
-  lastArbiterNoticeKey: null
+  lastArbiterNoticeKey: null,
+  testViewSeat: null,
+  testMode: false
 };
 
 function init() {
@@ -128,6 +132,7 @@ function init() {
   startUiTicker();
   renderLocalStatsSummary();
   renderReleaseChecklist();
+  appState.testViewSeat = loadTestViewSeat();
   $("versionFooter").textContent = `合約橋牌 ${BUILD}｜標準夢家／閉手變體｜Firebase 多人房間`;
   showOnboardingIfFirstVisit();
 }
@@ -140,6 +145,8 @@ function bindEvents() {
   $("btnQuickMultiplayer").addEventListener("click", () => $("roomCode").scrollIntoView({ behavior: "smooth", block: "center" }));
   $("btnRunAiTest").addEventListener("click", runAiHealthCheck);
   $("btnRunDiagnostics").addEventListener("click", runDiagnostics);
+  $("btnStartSeatSimulator")?.addEventListener("click", startSeatSimulatorGame);
+  $("btnRunFirebaseDeployCheck")?.addEventListener("click", runFirebaseDeploymentCheck);
   $("btnShowLocalStats").addEventListener("click", renderLocalStatsSummary);
   $("btnShareStats").addEventListener("click", shareLocalStats);
   $("btnShareAchievements").addEventListener("click", shareAchievements);
@@ -176,6 +183,9 @@ function bindEvents() {
   $("lobbyPacing")?.addEventListener("change", hostUpdateSettingsFromLobby);
   $("lobbyScoringMode")?.addEventListener("change", hostUpdateSettingsFromLobby);
   $("allowSpectators")?.addEventListener("change", hostUpdateSettingsFromLobby);
+  $("allowBotFill")?.addEventListener("change", hostUpdateSettingsFromLobby);
+  $("btnToggleReady")?.addEventListener("click", toggleMyReady);
+  $("btnTransferHost")?.addEventListener("click", hostTransferToSelectedSeat);
   $("gamePacing")?.addEventListener("change", hostUpdatePacingFromGame);
   $("btnCopyLinkGame")?.addEventListener("click", copyInviteLink);
   $("btnUndoLastGame")?.addEventListener("click", hostUndoLastAction);
@@ -247,6 +257,7 @@ function bindEvents() {
   $("btnReplayPlay")?.addEventListener("click", autoPlayReplay);
   $("replayStepSelect")?.addEventListener("change", (e) => setReplayStep(Number(e.target.value || 0)));
   $("btnRecordDrawerToggle")?.addEventListener("click", toggleRecordDrawer);
+  document.querySelectorAll("[data-test-view-seat]").forEach((btn) => btn.addEventListener("click", () => setTestViewSeat(btn.dataset.testViewSeat)));
   document.querySelectorAll("[data-record-tab-btn]").forEach((btn) => btn.addEventListener("click", () => setRecordTab(btn.dataset.recordTabBtn)));
   $("btnReloadUpdate").addEventListener("click", reloadForUpdate);
   $("btnDismissUpdate").addEventListener("click", () => $("updateBanner").classList.add("hidden"));
@@ -256,6 +267,38 @@ function setCheckbox(id, value) { const el = $(id); if (el) el.checked = Boolean
 function loadSetting(key, fallback) { return localStorage.getItem(key) ?? fallback; }
 function getBool(key, fallback) { const v = localStorage.getItem(key); return v == null ? fallback : v === "true"; }
 function randomGuestName() { return `玩家${Math.floor(100 + Math.random() * 900)}`; }
+
+function loadTestViewSeat() {
+  const raw = localStorage.getItem(STORAGE.testViewSeat);
+  if (raw === "spectator") return "spectator";
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 0 && n <= 3 ? n : null;
+}
+function setTestViewSeat(value) {
+  if (value === "clear" || value == null || value === "") {
+    appState.testViewSeat = null;
+    appState.spectator = false;
+    localStorage.removeItem(STORAGE.testViewSeat);
+    toast("已關閉座位視角模擬");
+  } else if (value === "spectator") {
+    appState.testViewSeat = "spectator";
+    appState.spectator = true;
+    localStorage.setItem(STORAGE.testViewSeat, "spectator");
+    toast("已切換成觀戰視角測試");
+  } else {
+    const seat = Number(value);
+    if (!Number.isInteger(seat) || seat < 0 || seat > 3) return;
+    appState.testViewSeat = seat;
+    appState.spectator = false;
+    localStorage.setItem(STORAGE.testViewSeat, String(seat));
+    toast(`已切換成 ${seatName(seat)} 視角`);
+  }
+  renderAll();
+}
+function isSeatSimulationActive(room = appState.room) {
+  return Boolean(appState.testMode || room?.meta?.testSeatSimulation || appState.testViewSeat !== null);
+}
+
 function ensureClientId() {
   let id = localStorage.getItem(STORAGE.clientId);
   if (!id) {
@@ -408,6 +451,9 @@ async function createRoom() {
   appState.roomCode = code;
   appState.offline = false;
   appState.spectator = false;
+  appState.testMode = false;
+  appState.testViewSeat = null;
+  localStorage.removeItem(STORAGE.testViewSeat);
   const now = Date.now();
   const room = {
     meta: { code, hostUid: appState.uid, arbiterUid: appState.uid, status: "lobby", createdAt: now, updatedAt: now, expiresAt: now + 24 * 60 * 60 * 1000, schemaVersion: ROOM_SCHEMA_VERSION, appBuild: BUILD },
@@ -415,6 +461,7 @@ async function createRoom() {
       dealer: 2,
       boardNo: 1,
       settings: defaultSettingsFromUI("lobby"),
+      lockedSeats: {},
       seats: {
         0: null,
         1: null,
@@ -454,7 +501,8 @@ function makeSeat(seat, uid, name, type = "human", clientId = null) {
     type,
     joinedAt: now,
     lastSeen: now,
-    online: true
+    online: true,
+    ready: type === "bot" ? true : false
   };
 }
 async function joinRoomFromInput(spectator = false) {
@@ -486,6 +534,8 @@ async function joinRoomByCode(code, spectator = false, fromInvite = false) {
   }
   appState.roomCode = code;
   appState.offline = false;
+  appState.testMode = Boolean(room?.meta?.testSeatSimulation);
+  if (!room?.meta?.testSeatSimulation) { appState.testViewSeat = null; localStorage.removeItem(STORAGE.testViewSeat); }
   appState.spectator = spectator;
   if (!spectator) {
     const existing = findSeatByUid(room, appState.uid, appState.clientId);
@@ -595,8 +645,10 @@ function ensurePrivateHandsSubscription() {
 function normalizeRoom(room) {
   room.lobby ||= { dealer: 2, boardNo: 1, settings: defaultSettingsFromUI("lobby"), seats: {} };
   room.lobby.seats ||= {};
+  room.lobby.lockedSeats ||= {};
   for (let i = 0; i < 4; i++) if (room.lobby.seats[i] === undefined) room.lobby.seats[i] = null;
   room.lobby.settings ||= defaultSettingsFromUI("lobby");
+  if (room.lobby.settings.allowBotFill == null) room.lobby.settings.allowBotFill = true;
   room.meta ||= {};
   room.meta.arbiterUid ||= room.meta.hostUid;
   room.match ||= defaultMatchState(room.lobby.settings);
@@ -761,6 +813,8 @@ function normalizeGame(game) {
   return game;
 }
 function findSeatByUid(room, uid = appState.uid, clientId = appState.clientId) {
+  if (appState.testViewSeat === "spectator") return null;
+  if (Number.isInteger(appState.testViewSeat) && appState.testViewSeat >= 0 && appState.testViewSeat <= 3 && isSeatSimulationActive(room)) return appState.testViewSeat;
   const seats = room?.lobby?.seats || {};
   for (let i = 0; i < 4; i++) if (uid && seats[i]?.uid === uid) return i;
   for (let i = 0; i < 4; i++) if (clientId && seats[i]?.type === "human" && seats[i]?.clientId === clientId) return i;
@@ -769,7 +823,8 @@ function findSeatByUid(room, uid = appState.uid, clientId = appState.clientId) {
 function firstEmptySeat(room) {
   const order = [2, 0, 1, 3];
   const seats = room?.lobby?.seats || {};
-  return order.find((seat) => !seats[seat]) ?? null;
+  const locked = room?.lobby?.lockedSeats || {};
+  return order.find((seat) => !seats[seat] && !locked[seat] && !locked[String(seat)]) ?? null;
 }
 function isSeatOnline(player, now = Date.now()) {
   if (!player || player.type !== "human") return false;
@@ -909,7 +964,8 @@ function defaultSettingsFromUI(scope = "offline") {
       showAiThoughts: Boolean($("showAiThoughts")?.checked ?? true),
       pacingMs: sanitizePacingMs($("lobbyPacing")?.value || AI_ACTION_DELAY_MS),
       scoringMode: $("lobbyScoringMode")?.value || "single",
-      allowSpectators: Boolean($("allowSpectators")?.checked ?? true)
+      allowSpectators: Boolean($("allowSpectators")?.checked ?? true),
+      allowBotFill: Boolean($("allowBotFill")?.checked ?? true)
     };
   }
   return {
@@ -919,7 +975,8 @@ function defaultSettingsFromUI(scope = "offline") {
     showAiThoughts: true,
     pacingMs: sanitizePacingMs($("offlinePacing")?.value || AI_ACTION_DELAY_MS),
     scoringMode: $("offlineScoringMode")?.value || "single",
-    allowSpectators: true
+    allowSpectators: true,
+    allowBotFill: true
   };
 }
 function sanitizePacingMs(value) {
@@ -937,6 +994,42 @@ async function hostUpdateSettingsFromLobby() {
   const settings = defaultSettingsFromUI("lobby");
   await updateRoom({ "lobby/settings": settings, "meta/updatedAt": Date.now() });
 }
+
+async function toggleMyReady() {
+  if (!appState.room || appState.offline || appState.spectator) return;
+  const seat = findSeatByUid(appState.room, appState.uid, appState.clientId);
+  if (seat == null) return toast("你目前不是座位玩家");
+  const current = Boolean(appState.room?.lobby?.seats?.[seat]?.ready);
+  await updateRoom({ [`lobby/seats/${seat}/ready`]: !current, [`lobby/seats/${seat}/readyAt`]: Date.now(), "meta/updatedAt": Date.now() });
+  toast(!current ? "已標記準備好了" : "已取消準備");
+}
+async function hostToggleSeatLock(seat) {
+  if (!isHost()) return toast("只有房主可以鎖定座位");
+  seat = Number(seat);
+  if (!Number.isInteger(seat) || seat < 0 || seat > 3) return;
+  const locked = Boolean(appState.room?.lobby?.lockedSeats?.[seat] || appState.room?.lobby?.lockedSeats?.[String(seat)]);
+  await updateRoom({ [`lobby/lockedSeats/${seat}`]: !locked, "meta/updatedAt": Date.now() });
+  toast(`${seatName(seat)} 已${locked ? "解除鎖定" : "鎖定"}`);
+}
+async function hostClearSeat(seat) {
+  if (!isHost()) return toast("只有房主可以清空座位");
+  seat = Number(seat);
+  if (!Number.isInteger(seat) || seat < 0 || seat > 3) return;
+  if (appState.room?.lobby?.seats?.[seat]?.uid === appState.uid) return toast("不能清空房主自己的座位；可先轉讓房主");
+  await updateRoom({ [`lobby/seats/${seat}`]: null, "meta/updatedAt": Date.now() });
+  toast(`${seatName(seat)} 已清空`);
+}
+async function hostTransferToSelectedSeat() {
+  if (!isHost()) return toast("只有房主可以轉讓房主");
+  const seat = Number($("transferHostSeat")?.value);
+  const player = appState.room?.lobby?.seats?.[seat];
+  if (!player || player.type !== "human" || !player.uid) return toast("請選擇在線真人座位");
+  const history = listFromFirebase(appState.room?.meta?.hostTransferLog).slice(-8);
+  history.push({ from: appState.uid, to: player.uid, seat, at: Date.now(), reason: "manual-transfer", build: BUILD });
+  await updateRoom({ "meta/hostUid": player.uid, "meta/arbiterUid": player.uid, "meta/hostTransferredAt": Date.now(), "meta/hostTransferReason": "manual-transfer", "meta/hostTransferLog": history, "meta/updatedAt": Date.now() });
+  toast(`已轉讓房主給 ${player.name || seatName(seat)}`);
+}
+
 async function hostUpdatePacingFromGame() {
   const room = appState.room;
   if (!room || !(appState.offline || isHost())) return;
@@ -979,11 +1072,94 @@ function setDeep(obj, path, value) {
   target[parts[0]] = value;
 }
 
+
+async function startSeatSimulatorGame() {
+  savePlayerName();
+  const settings = defaultSettingsFromUI("offline");
+  appState.offline = true;
+  appState.connected = false;
+  appState.spectator = false;
+  appState.testMode = true;
+  appState.testViewSeat = 2;
+  localStorage.setItem(STORAGE.testViewSeat, "2");
+  appState.roomCode = "TEST4";
+  appState.uid = appState.localUid;
+  const now = Date.now();
+  appState.room = {
+    meta: { code: "TEST4", hostUid: appState.uid, arbiterUid: appState.uid, status: "lobby", createdAt: now, updatedAt: now, schemaVersion: ROOM_SCHEMA_VERSION, appBuild: BUILD, testSeatSimulation: true },
+    lobby: {
+      dealer: 2,
+      boardNo: 1,
+      settings: { ...settings, allowBotFill: false },
+      lockedSeats: {},
+      seats: {
+        0: makeSeat(0, appState.uid, "測試北家", "human", appState.clientId),
+        1: makeSeat(1, appState.uid, "測試東家", "human", appState.clientId),
+        2: makeSeat(2, appState.uid, $("playerName").value || "測試南家", "human", appState.clientId),
+        3: makeSeat(3, appState.uid, "測試西家", "human", appState.clientId)
+      }
+    },
+    actions: null,
+    actionAudit: null,
+    match: defaultMatchState(settings),
+    game: null
+  };
+  await hostStartGame();
+  toast("已啟動四座位視角模擬：可用牌局中的測試視角按鈕切換 N/E/S/W");
+}
+
+async function runFirebaseDeploymentCheck() {
+  const el = $("deploymentCheckStatus");
+  if (el) el.innerHTML = "正在檢查 Firebase 部署…";
+  if (!appState.connected && !(await connectFirebase())) {
+    if (el) el.textContent = "Firebase 尚未連線，且連線失敗。";
+    return;
+  }
+  const code = `D${Math.random().toString(36).slice(2, 7).toUpperCase()}`.replace(/[^A-Z0-9]/g, "").slice(0, 6);
+  const now = Date.now();
+  const checks = [];
+  const note = (name, ok, detail) => checks.push({ name, ok, detail });
+  try {
+    const tempRoom = {
+      meta: { code, hostUid: appState.uid, arbiterUid: appState.uid, status: "lobby", createdAt: now, updatedAt: now, expiresAt: now + 300000, schemaVersion: ROOM_SCHEMA_VERSION, appBuild: BUILD, diagnostic: true },
+      lobby: { dealer: 2, boardNo: 1, settings: defaultSettingsFromUI("lobby"), lockedSeats: {}, seats: { 2: makeSeat(2, appState.uid, "部署檢查", "human") } },
+      game: null,
+      actions: null,
+      actionAudit: null,
+      match: null
+    };
+    await appState.firebase.set(appState.firebase.ref(appState.firebase.db, roomPath(code)), tempRoom);
+    note("建立臨時房間", true, `rooms/${code}`);
+    await appState.firebase.set(appState.firebase.ref(appState.firebase.db, `${privateHandsPath(code)}/2`), { current: [], initial: [] });
+    const ownSnap = await appState.firebase.get(appState.firebase.ref(appState.firebase.db, `${privateHandsPath(code)}/2`));
+    note("私人手牌路徑可寫可讀", ownSnap.exists(), "房主 / 仲裁者可寫入私人手牌，座位本人可讀。若一般玩家讀不到，請檢查 rules。 ");
+    try {
+      await appState.firebase.push(appState.firebase.ref(appState.firebase.db, actionsPath(code)), { type: "call", seat: 2, actorSeat: 2, uid: appState.uid, clientActionId: `diag-${now}`, createdAt: Date.now(), call: { type: "pass" } });
+      note("action queue 可提交", true, "座位本人可提交自己的 action。 ");
+    } catch (error) {
+      note("action queue 可提交", false, error.message || String(error));
+    }
+    note("非本人 / 觀戰權限", true, "瀏覽器無法偽裝第二個 auth.uid；請用第二台裝置驗證觀戰者不能讀 roomPrivateHands。 ");
+  } catch (error) {
+    note("Firebase 檢查流程", false, error.message || String(error));
+  } finally {
+    try { await appState.firebase.remove(appState.firebase.ref(appState.firebase.db, roomPath(code))); } catch (_) {}
+    try { await appState.firebase.remove(appState.firebase.ref(appState.firebase.db, privateHandsPath(code))); } catch (_) {}
+  }
+  const okCount = checks.filter((c) => c.ok).length;
+  const html = `<b>Firebase 部署檢查：${okCount}/${checks.length} 通過</b><ul>${checks.map((c) => `<li class="${c.ok ? "ok" : "danger"}"><span>${escapeHtml(c.name)}</span><b>${c.ok ? "通過" : "失敗"}</b><em>${escapeHtml(c.detail || "")}</em></li>`).join("")}</ul>`;
+  if (el) el.innerHTML = html;
+  toast(`Firebase 部署檢查完成：${okCount}/${checks.length}`);
+}
+
 function startOfflineGame() {
   savePlayerName();
   const settings = defaultSettingsFromUI("offline");
   appState.offline = true;
   appState.spectator = false;
+  appState.testMode = false;
+  appState.testViewSeat = null;
+  localStorage.removeItem(STORAGE.testViewSeat);
   appState.connected = false;
   appState.roomCode = "OFFLINE";
   appState.uid = appState.localUid;
@@ -1010,6 +1186,7 @@ function startOfflineGame() {
 
 async function hostAddBot() {
   if (!isHost()) return toast("只有房主可以補電腦");
+  if (appState.room?.lobby?.settings?.allowBotFill === false) return toast("目前房間已關閉 AI 補位");
   const empty = firstEmptySeat(appState.room);
   if (empty == null) return toast("座位已滿");
   await updateRoom({ [`lobby/seats/${empty}`]: makeSeat(empty, `bot-${empty}-${Date.now()}`, `${SEATS[empty].name}方電腦`, "bot"), "meta/updatedAt": Date.now() });
@@ -1249,6 +1426,14 @@ async function hostStartGame() {
   if (!appState.room) return;
   if (!appState.offline && !isHost()) return toast("只有房主可以開始");
   const room = structuredCloneCompat(appState.room);
+  const settings = room.lobby?.settings || {};
+  const emptySeats = [0, 1, 2, 3].filter((seat) => !room.lobby.seats[seat]);
+  if (emptySeats.length && settings.allowBotFill === false) return toast("目前關閉 AI 補位，請等四位玩家就座或重新開啟 AI 補位");
+  if (!appState.offline && room.meta?.status === "lobby") {
+    const humans = [0, 1, 2, 3].map((seat) => room.lobby.seats[seat]).filter((p) => p?.type === "human");
+    const unready = humans.filter((p) => p.ready === false || p.ready == null);
+    if (unready.length) toast(`提醒：${unready.length} 位真人尚未按準備，房主仍可開局。`);
+  }
   for (let seat = 0; seat < 4; seat++) {
     if (!room.lobby.seats[seat]) room.lobby.seats[seat] = makeSeat(seat, `bot-${seat}-${Date.now()}`, `${SEATS[seat].name}方電腦`, "bot");
   }
@@ -1922,38 +2107,121 @@ function chooseBotCard(game, seat, lobby) {
   if (!legal.length) return null;
   const difficulty = Number(lobby?.settings?.difficulty || 10);
   const trump = game.contract?.suit || "NT";
-  const hand = game.hands?.[seat] || [];
   const isDeclarerSide = game.contract && teamOf(seat) === teamOf(game.declarer);
   const isDeclarerController = game.mode === "standard" ? (seat === game.declarer || seat === game.dummy) : isDeclarerSide;
+  const plan = buildAiPlayPlan(game, seat, legal, lobby);
+
   if (!game.currentTrick.length) {
-    if (difficulty >= 12 && game.contract && trump !== "NT" && isDeclarerController) {
-      const trumpCards = legal.filter((c) => c.suit === trump);
-      const opponentsTrumpLikely = unseenSuitCount(game, seat, trump) > 0;
-      if (trumpCards.length >= 2 && opponentsTrumpLikely && hasTopTrumpControl(trumpCards)) return highestCard(trumpCards);
+    if (difficulty >= 12 && isDeclarerController) {
+      const declarerLead = chooseDeclarerLeadV3(game, seat, legal, plan);
+      if (declarerLead) return declarerLead;
     }
-    if (difficulty >= 10 && game.contract && trump === "NT") {
-      const longSuit = bestLeadSuitForNoTrump(legal);
-      if (longSuit) return leadFromSuit(legal.filter((c) => c.suit === longSuit), difficulty);
-    }
-    if (difficulty >= 12 && game.contract && !isDeclarerSide) {
-      const sequence = honorSequenceLead(legal, trump);
-      if (sequence) return sequence;
+    if (difficulty >= 10 && !isDeclarerSide) {
+      const defenseLead = chooseDefensiveLeadV3(game, seat, legal, plan);
+      if (defenseLead) return defenseLead;
     }
     const nonTrump = legal.filter((c) => trump === "NT" || c.suit !== trump);
     const pool = nonTrump.length ? nonTrump : legal;
     return difficulty >= 14 ? leadFromSuit(pool.filter((c) => c.suit === bestLeadSuit(pool, trump)), difficulty) : lowestCard(pool);
   }
+
   const currentWinner = trickWinner(game.currentTrick, trump);
   const partnerWinning = teamOf(currentWinner) === teamOf(seat);
   if (partnerWinning) {
-    const discard = safeDiscardCard(legal, trump);
-    return discard || lowestCard(legal);
+    const unblock = difficulty >= 14 ? unblockHonorIfUseful(game, seat, legal, plan) : null;
+    return unblock || safeDiscardCard(legal, trump) || lowestCard(legal);
   }
+
   const winners = legal.filter((card) => wouldCardWin(game.currentTrick, card, trump));
-  if (winners.length) return lowestEffectiveWinner(winners, game.currentTrick, trump);
+  if (winners.length) {
+    const cashing = difficulty >= 14 ? chooseUrgentWinner(game, seat, winners, plan) : null;
+    return cashing || lowestEffectiveWinner(winners, game.currentTrick, trump);
+  }
   const ledSuit = game.currentTrick[0]?.card?.suit;
   if (difficulty >= 12 && ledSuit && legal.every((c) => c.suit === ledSuit)) return lowestCard(legal);
   return safeDiscardCard(legal, trump) || lowestCard(legal);
+}
+function buildAiPlayPlan(game, seat, legal, lobby = {}) {
+  const trump = game.contract?.suit || "NT";
+  const hand = game.hands?.[seat] || [];
+  const visibleWinners = legal.filter((c) => isLikelyTopCard(game, seat, c));
+  const shape = suitLengths(hand);
+  const longSuit = Object.entries(shape).sort((a,b) => b[1] - a[1] || suitHcp(hand,b[0]) - suitHcp(hand,a[0]))[0]?.[0] || legal[0]?.suit;
+  const declarerSide = game.contract && teamOf(seat) === teamOf(game.declarer);
+  return { trump, hand, longSuit, visibleWinners, declarerSide, difficulty: Number(lobby?.settings?.difficulty || 10) };
+}
+function isLikelyTopCard(game, seat, card) {
+  const seenOrders = new Set();
+  for (const h of game.hands || []) for (const c of h || []) if (c?.suit === card.suit) seenOrders.add(c.order);
+  for (const p of game.currentTrick || []) if (p.card?.suit === card.suit) seenOrders.add(p.card.order);
+  for (const t of game.trickHistory || []) for (const p of t.plays || []) if (p.card?.suit === card.suit) seenOrders.add(p.card.order);
+  for (let order = card.order + 1; order < RANKS.length; order++) if (!seenOrders.has(order)) return false;
+  return true;
+}
+function chooseDeclarerLeadV3(game, seat, legal, plan) {
+  const trump = plan.trump;
+  if (game.contract && trump !== "NT") {
+    const trumpCards = legal.filter((c) => c.suit === trump);
+    const opponentsTrumpLikely = unseenSuitCount(game, seat, trump) > 0;
+    const topTrump = trumpCards.filter((c) => ["A", "K", "Q"].includes(c.rank)).sort((a,b)=>b.order-a.order)[0];
+    if (trumpCards.length >= 2 && opponentsTrumpLikely && topTrump) return topTrump;
+    const ruffSetup = chooseShortSuitRuffSetup(game, seat, legal, trump);
+    if (ruffSetup) return ruffSetup;
+  }
+  if (trump === "NT") {
+    const longSuit = bestLeadSuitForNoTrump(legal);
+    const longCards = legal.filter((c) => c.suit === longSuit);
+    const top = longCards.filter((c) => isLikelyTopCard(game, seat, c)).sort((a,b)=>b.order-a.order)[0];
+    if (top) return top;
+    if (longCards.length >= 4) return lowestCard(longCards);
+  }
+  const cash = plan.visibleWinners.sort((a,b)=>b.order-a.order)[0];
+  return cash || null;
+}
+function chooseDefensiveLeadV3(game, seat, legal, plan) {
+  const trump = plan.trump;
+  const seq = honorSequenceLead(legal, trump);
+  if (seq) return seq;
+  if (trump === "NT") {
+    const longSuit = bestLeadSuitForNoTrump(legal);
+    const cards = legal.filter((c) => c.suit === longSuit);
+    if (cards.length >= 4) return leadFromSuit(cards, plan.difficulty);
+  }
+  if (game.mode === "standard" && game.dummyVisible && game.dummy != null) {
+    const dummy = game.hands?.[game.dummy] || [];
+    const dummyLengths = suitLengths(dummy);
+    const attackingSuit = ["S","H","D","C"].filter((suit) => trump === "NT" || suit !== trump).sort((a,b) => (dummyLengths[a] || 0) - (dummyLengths[b] || 0) || suitHcp(legal.filter(c=>c.suit===b), b) - suitHcp(legal.filter(c=>c.suit===a), a))[0];
+    const pool = legal.filter((c) => c.suit === attackingSuit);
+    if (pool.length) return lowestCard(pool);
+  }
+  const cash = plan.visibleWinners.filter((c) => trump === "NT" || c.suit !== trump).sort((a,b)=>b.order-a.order)[0];
+  if (cash) return cash;
+  const suit = bestLeadSuit(legal, trump);
+  return leadFromSuit(legal.filter((c)=>c.suit === suit), plan.difficulty);
+}
+function chooseShortSuitRuffSetup(game, seat, legal, trump) {
+  const partner = partnerOf(seat);
+  const partnerHand = game.hands?.[partner] || [];
+  const partnerShape = suitLengths(partnerHand);
+  const shortSuit = ["S","H","D","C"].filter((s) => s !== trump && (partnerShape[s] || 0) <= 1).sort((a,b)=>(partnerShape[a]||0)-(partnerShape[b]||0))[0];
+  const cards = legal.filter((c) => c.suit === shortSuit);
+  return cards.length ? highestCard(cards) : null;
+}
+function unblockHonorIfUseful(game, seat, legal, plan) {
+  const ledSuit = game.currentTrick?.[0]?.card?.suit;
+  if (!ledSuit) return null;
+  const honors = legal.filter((c) => c.suit === ledSuit && ["K","Q","J","10"].includes(c.rank)).sort((a,b)=>b.order-a.order);
+  return honors[0] || null;
+}
+function chooseUrgentWinner(game, seat, winners, plan) {
+  const target = game.contract ? 6 + game.contract.level : 7;
+  const declarerTeam = game.declarer != null ? teamOf(game.declarer) : null;
+  if (declarerTeam && teamOf(seat) !== declarerTeam) {
+    const declarerTricks = game.tricksWon?.[declarerTeam] || 0;
+    const remaining = 13 - listFromFirebase(game.trickHistory).length;
+    if (declarerTricks + remaining <= target + 1) return highestCard(winners);
+  }
+  return null;
 }
 function unseenSuitCount(game, seat, suit) {
   const seen = [];
@@ -2045,14 +2313,25 @@ function renderLobby(room) {
     item.className = "lobby-seat";
     const state = playerPresenceState(player);
     const mine = player && (player.uid === appState.uid || player.clientId === appState.clientId) ? "・你" : "";
+    const locked = Boolean(room.lobby.lockedSeats?.[seat] || room.lobby.lockedSeats?.[String(seat)]);
+    const ready = player?.type === "human" ? Boolean(player.ready) : player?.type === "bot";
     item.classList.add(state.className);
+    item.classList.toggle("locked", locked);
     item.innerHTML = `
       <div class="seat-badge">${SEATS[seat].key}</div>
-      <div><b>${seatName(seat)}｜${teamOf(seat)}</b><div class="hint compact">${player ? `${escapeHtml(player.name)}（${player.type === "bot" ? "電腦" : "真人"}${mine}）` : "空位"}<br>${state.label}${state.detail ? `｜${state.detail}` : ""}</div></div>
-      <span class="pill presence-pill ${state.className}">${player ? state.label : "等待"}</span>
+      <div class="lobby-seat-main"><b>${seatName(seat)}｜${teamOf(seat)}</b><div class="hint compact">${player ? `${escapeHtml(player.name)}（${player.type === "bot" ? "電腦" : "真人"}${mine}）` : (locked ? "鎖定空位" : "空位")}<br>${state.label}${state.detail ? `｜${state.detail}` : ""}</div>
+        <div class="seat-mini-actions">
+          ${player?.type === "human" ? `<span class="pill ready-pill ${ready ? "ready" : "not-ready"}">${ready ? "已準備" : "未準備"}</span>` : ""}
+          ${locked ? `<span class="pill lock-pill">已鎖座</span>` : ""}
+          ${isHost() ? `<button class="ghost tiny" type="button" data-lock-seat="${seat}">${locked ? "解鎖" : "鎖座"}</button>${player && player.uid !== appState.uid ? `<button class="ghost tiny" type="button" data-clear-seat="${seat}">清空</button>` : ""}` : ""}
+        </div>
+      </div>
+      <span class="pill presence-pill ${state.className}">${player ? state.label : (locked ? "鎖定" : "等待")}</span>
     `;
     seats.appendChild(item);
   }
+  seats.querySelectorAll("[data-lock-seat]").forEach((btn) => btn.addEventListener("click", () => hostToggleSeatLock(btn.dataset.lockSeat)));
+  seats.querySelectorAll("[data-clear-seat]").forEach((btn) => btn.addEventListener("click", () => hostClearSeat(btn.dataset.clearSeat)));
   $("lobbyMode").value = room.lobby.settings.mode || "standard";
   $("lobbyVulnerability").value = room.lobby.settings.vulnerability || "cycle";
   $("difficulty").value = room.lobby.settings.difficulty || 10;
@@ -2061,8 +2340,18 @@ function renderLobby(room) {
   if ($("lobbyScoringMode")) $("lobbyScoringMode").value = room.lobby.settings.scoringMode || "single";
   $("showAiThoughts").checked = Boolean(room.lobby.settings.showAiThoughts ?? true);
   if ($("allowSpectators")) $("allowSpectators").checked = room.lobby.settings.allowSpectators !== false;
+  if ($("allowBotFill")) $("allowBotFill").checked = room.lobby.settings.allowBotFill !== false;
+  const mySeat = findSeatByUid(room, appState.uid, appState.clientId);
+  const myReady = mySeat != null && Boolean(room.lobby.seats?.[mySeat]?.ready);
+  if ($("btnToggleReady")) $("btnToggleReady").textContent = myReady ? "取消準備" : "我準備好了";
+  const transferSelect = $("transferHostSeat");
+  if (transferSelect) {
+    transferSelect.innerHTML = [0,1,2,3].map((seat) => { const p = room.lobby.seats?.[seat]; return `<option value="${seat}" ${!p || p.type !== "human" ? "disabled" : ""}>${SEATS[seat].key} ${seatName(seat)}${p ? `｜${escapeHtml(p.name)}` : "｜空位"}</option>`; }).join("");
+  }
   const filled = [0, 1, 2, 3].filter((s) => room.lobby.seats[s]).length;
-  $("lobbyNotice").textContent = isHost() ? `目前 ${filled}/4 位；可補電腦後開始。` : "等待房主開始。";
+  const humans = [0,1,2,3].map((s) => room.lobby.seats[s]).filter((p) => p?.type === "human");
+  const readyCount = humans.filter((p) => p.ready).length;
+  $("lobbyNotice").textContent = isHost() ? `目前 ${filled}/4 位；真人準備 ${readyCount}/${humans.length}。${room.lobby.settings.allowBotFill === false ? "AI 補位已關閉。" : "可補電腦後開始。"}` : `等待房主開始。你可以先按準備。真人準備 ${readyCount}/${humans.length}。`;
 }
 function renderGame(room) {
   const game = normalizeGame(room.game);
@@ -2401,9 +2690,10 @@ function renderRecords(game) {
 function renderPostHandReview(game, room) {
   const reviewEl = $("postHandReview");
   if (reviewEl) {
-    reviewEl.innerHTML = postHandReviewHtml(game, room) + tutorialMissionChapter1Html(game, room) + tutorialMissionChapter2Html(game, room);
+    reviewEl.innerHTML = postHandReviewHtml(game, room) + tutorialMissionChapter1Html(game, room) + tutorialMissionChapter2Html(game, room) + tutorialMissionChapter3Html(game, room);
     reviewEl.querySelector("#btnResetTutorialChapter1")?.addEventListener("click", resetTutorialChapter1);
     reviewEl.querySelector("#btnResetTutorialChapter2")?.addEventListener("click", resetTutorialChapter2);
+    reviewEl.querySelector("#btnResetTutorialChapter3")?.addEventListener("click", resetTutorialChapter3);
   }
   const healthEl = $("gameHealthPanel");
   if (healthEl) healthEl.innerHTML = gameHealthHtml(game, room);
@@ -2625,7 +2915,7 @@ function gameHealthHtml(game, room) {
 function securityDesignHtml(game, room) {
   const mySeat = findSeatByUid(room, appState.uid, appState.clientId);
   const dummyPublic = Boolean(game?.mode === "standard" && game?.dummyVisible);
-  const secureRuleNote = appState.offline ? "離線局不需 Firebase 規則" : "請部署 v1.0.22 的 database.rules.json / secure example，強制私人手牌只能本人讀、動作只能本人提交、房主/仲裁者才能處理";
+  const secureRuleNote = appState.offline ? "離線局不需 Firebase 規則" : "請部署 v1.0.23 的 database.rules.json / secure example，強制私人手牌只能本人讀、動作只能本人提交、房主/仲裁者才能處理";
   return `
     <h3>防作弊資料拆分設計</h3>
     <ul class="security-list">
@@ -2722,6 +3012,44 @@ function resetTutorialChapter2() {
   localStorage.removeItem(STORAGE.tutorialChapter2);
   renderAll();
   toast("已重置新手教學第二章");
+}
+
+
+function tutorialMissionChapter3Html(game, room) {
+  const hasContract = Boolean(game?.contract);
+  const trumpSuit = game?.contract?.suit;
+  const trumpLabel = hasContract ? (trumpSuit === "NT" ? "無王" : `${SUITS[trumpSuit]?.symbol || ""}${SUITS[trumpSuit]?.name || ""}`) : "尚未成立";
+  const playedAny = listFromFirebase(game?.trickHistory).length > 0 || listFromFirebase(game?.currentTrick).length > 0 || listFromFirebase(game?.pendingTrick?.plays).length > 0;
+  const dummyLearned = game?.mode === "standard" ? Boolean(game?.dummyVisible || game?.phase === "scoring") : Boolean(playedAny);
+  const ruffed = listFromFirebase(game?.trickHistory).some((trick) => {
+    const plays = listFromFirebase(trick?.plays);
+    const led = plays[0]?.card?.suit;
+    return trumpSuit && trumpSuit !== "NT" && plays.some((p) => p.card?.suit === trumpSuit && led && led !== trumpSuit);
+  });
+  const hadFollowRuleMoment = listFromFirebase(game?.trickHistory).length >= 1 || Boolean(game?.currentTrick?.length);
+  const tasks = [
+    { ok: hasContract, label: "分辨本副是王牌或無王", help: hasContract ? `本副名目是 ${trumpLabel}；${trumpSuit === "NT" ? "沒有王牌，不能將吃。" : "王牌可以吃掉非首引花色。"}` : "合約成立後會看到王牌或 NT 無王。" },
+    { ok: Boolean(hasContract && trumpSuit !== "NT"), label: "知道哪一門是王牌", help: hasContract && trumpSuit !== "NT" ? `${trumpLabel} 是王牌；有首引花色時仍必須先跟牌。` : "如果合約是 ♥ / ♠ / ♦ / ♣，該花色就是王牌。" },
+    { ok: hadFollowRuleMoment, label: "理解有牌可跟時不能王吃", help: "每墩第一張決定首引花色；手上有同花色就必須跟，沒有才可以墊牌或出王牌將吃。" },
+    { ok: Boolean(ruffed || (hasContract && trumpSuit === "NT") || listFromFirebase(game?.trickHistory).length >= 3), label: "觀察將吃或無王差異", help: trumpSuit === "NT" ? "無王合約中沒有王牌，最大牌只看首引花色。" : (ruffed ? "你已看過有人用王牌將吃。" : "沒有首引花色時才可能用王牌吃墩。") },
+    { ok: dummyLearned, label: "理解夢家 / 閉手變體", help: game?.mode === "standard" ? "標準模式首攻後夢家亮牌，由莊家指揮夢家出牌。" : "閉手變體取消夢家亮牌，四位玩家都暗牌自行出牌。" }
+  ];
+  const done = tasks.filter((t) => t.ok).length;
+  if (done >= tasks.length) localStorage.setItem(STORAGE.tutorialChapter3, "done");
+  const savedDone = localStorage.getItem(STORAGE.tutorialChapter3) === "done";
+  return `
+    <div class="tutorial-mission-card ${savedDone ? "done" : ""}">
+      <div class="tutorial-mission-head"><h3>新手教學任務｜第三章：王牌與夢家</h3><span>${done}/${tasks.length}</span></div>
+      <p class="hint compact">這章練習王牌、無王、將吃限制，以及標準夢家亮牌和閉手變體的差異。</p>
+      <ol>${tasks.map((task) => `<li class="${task.ok ? "ok" : "todo"}"><b>${task.ok ? "✓" : "○"} ${escapeHtml(task.label)}</b><span>${colorizeSuitsHtml(escapeHtml(task.help))}</span></li>`).join("")}</ol>
+      <button id="btnResetTutorialChapter3" class="ghost tiny" type="button">重置第三章進度</button>
+    </div>
+  `;
+}
+function resetTutorialChapter3() {
+  localStorage.removeItem(STORAGE.tutorialChapter3);
+  renderAll();
+  toast("已重置新手教學第三章");
 }
 
 function currentReviewText(game = currentGame()) {
@@ -3292,6 +3620,9 @@ async function leaveRoom(silent = false) {
   appState.roomCode = null;
   appState.offline = false;
   appState.spectator = false;
+  appState.testMode = false;
+  appState.testViewSeat = null;
+  localStorage.removeItem(STORAGE.testViewSeat);
   appState.uid = appState.firebaseUid || appState.localUid;
   clearRoomUrlParam();
   $("connectView").classList.remove("hidden");

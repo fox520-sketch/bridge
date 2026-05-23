@@ -1,3 +1,11 @@
+# v1.0.23 防作弊與測試補充
+
+本版在既有 `rooms/{code}/game` 公開狀態與 `roomPrivateHands/{code}/{seat}` 私人手牌拆分基礎上，新增「座位視角模擬」與「Firebase 部署檢查器」。
+
+- 座位視角模擬可在本機切換 N/E/S/W / 觀戰，檢查每個視角實際看到的手牌與公開資訊。
+- Firebase 部署檢查器會建立臨時診斷房間，測試房間建立、私人手牌讀寫與 action queue 提交。
+- 真正公開部署仍建議用兩台以上裝置驗證：觀戰者不能讀任何私人手牌、非座位玩家不能提交座位 action。
+
 # v1.0.22 更新重點
 
 - Firebase rules 正式強化：`database.rules.json` 已改成正式防作弊部署取向，分流公開房間資料、每席私人手牌、action queue、撤銷快照與房主 / 仲裁者權限。
