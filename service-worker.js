@@ -1,4 +1,4 @@
-const CACHE_NAME = "contract-bridge-v1-0-24-5-cache-reset-default-closed";
+const CACHE_NAME = "contract-bridge-v1-0-24-6-win-lose-animation";
 const ASSETS = [
   "./",
   "./index.html?v=1.0.24.5",

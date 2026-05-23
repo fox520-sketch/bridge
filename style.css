@@ -303,6 +303,20 @@ select:focus, input:focus, textarea:focus { border-color: var(--accent); box-sha
 .result-fx span:nth-child(3n) { background: #f472b6; animation-delay: .4s; left: 55%; }
 .result-fx span:nth-child(4n) { background: #34d399; animation-delay: .8s; left: 78%; }
 @keyframes fall { to { transform: translateY(105vh) rotate(260deg); } }
+.result-overlay.win .result-card { animation: resultWinPop .62s cubic-bezier(.2, 1.25, .2, 1); border-color: color-mix(in srgb, #facc15, var(--line) 25%); box-shadow: 0 30px 90px rgba(250, 204, 21, .28), 0 30px 80px rgba(0,0,0,.35); }
+.result-overlay.win #resultTitle { color: #fde68a; text-shadow: 0 0 22px rgba(250, 204, 21, .35); }
+.result-overlay.lose .result-card { animation: resultLoseShake .48s ease both; border-color: color-mix(in srgb, #f87171, var(--line) 35%); box-shadow: 0 30px 90px rgba(248, 113, 113, .18), 0 30px 80px rgba(0,0,0,.35); }
+.result-overlay.lose #resultTitle { color: #fecaca; text-shadow: 0 0 18px rgba(248, 113, 113, .3); }
+.result-overlay.draw .result-card, .result-overlay.spectator .result-card { animation: resultNeutralPulse .7s ease both; }
+.result-overlay.lose .result-fx span { width: 12px; height: 12px; border-radius: 50%; background: #94a3b8; opacity: .45; animation-duration: 2.4s; }
+.result-overlay.draw .result-fx span, .result-overlay.spectator .result-fx span { background: #93c5fd; opacity: .42; animation-duration: 2.8s; }
+.result-overlay.lose .result-fx span:nth-child(2n) { background: #f87171; }
+@keyframes resultWinPop { 0% { transform: translateY(18px) scale(.92); opacity: .25; } 60% { transform: translateY(0) scale(1.03); opacity: 1; } 100% { transform: translateY(0) scale(1); } }
+@keyframes resultLoseShake { 0%, 100% { transform: translateX(0); } 18% { transform: translateX(-9px); } 36% { transform: translateX(8px); } 54% { transform: translateX(-5px); } 72% { transform: translateX(4px); } }
+@keyframes resultNeutralPulse { 0% { transform: scale(.97); opacity: .5; } 100% { transform: scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .result-overlay .result-card, .result-overlay .result-fx span { animation: none !important; }
+}
 
 @supports not (height: 100dvh) {
   .result-card { max-height: calc(100vh - 88px); }

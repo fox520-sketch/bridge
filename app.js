@@ -1,4 +1,4 @@
-const BUILD = "bridge-v1.0.24.5-cache-reset-default-closed";
+const BUILD = "bridge-v1.0.24.6-win-lose-animation";
 const ROOM_SCHEMA_VERSION = 65;
 const SEATS = [
   { id: 0, key: "N", name: "北", team: "NS" },
@@ -3602,10 +3602,14 @@ function maybeShowResult(game) {
   if (appState.lastResultKey === key) return;
   appState.lastResultKey = key;
   saveGameResult(game);
-  const title = game.result.passedOut ? "四家 Pass" : (game.result.made ? "合約成約" : "合約失敗");
+  const personal = resultOutcomeForViewer(game, appState.room);
+  const contractState = game.result.passedOut ? "四家 Pass" : (game.result.made ? "合約成約" : "合約失敗");
+  const title = personal.viewerSeat == null ? contractState : personal.headline;
   $("resultTitle").textContent = title;
-  $("resultSubtitle").innerHTML = colorizeSuitsHtml(game.result.summary);
+  $("resultSubtitle").innerHTML = colorizeSuitsHtml(`${personal.message} ${game.result.summary ? "｜" + game.result.summary : ""}`);
   $("resultStats").innerHTML = [
+    [personal.viewerSeat == null ? "本局勝方" : "你的結果", personal.badge],
+    ["你的座位", personal.viewerSeat == null ? "觀戰者" : `${seatName(personal.viewerSeat)}｜${personal.viewerTeam}`],
     ["合約", game.contract ? contractText(game.contract, game.declarer) : "Passed out"],
     ["墩數", `NS ${game.tricksWon.NS || 0}｜EW ${game.tricksWon.EW || 0}`],
     ["分數變動", `NS +${game.result.scoreDelta.NS || 0}｜EW +${game.result.scoreDelta.EW || 0}`],
@@ -3613,8 +3617,38 @@ function maybeShowResult(game) {
     ["計分明細", (game.result.detail || []).join("｜") || "無"]
   ].map(([k, v]) => `<div class="result-stat ${k === "計分明細" ? "wide" : ""}"><span>${escapeHtml(k)}</span><b>${colorizeSuitsHtml(v)}</b></div>`).join("");
   $("resultNewDeal").disabled = !(appState.offline || isHost());
-  $("resultOverlay").classList.remove("hidden");
-  playSfx(game.result.made ? "success" : "fail");
+  const overlay = $("resultOverlay");
+  overlay.classList.remove("hidden", "win", "lose", "draw", "spectator");
+  overlay.classList.add(personal.animationClass);
+  playSfx(personal.animationClass === "win" ? "success" : personal.animationClass === "lose" ? "fail" : "start");
+  if (personal.animationClass === "win") vibrate([60, 40, 90]);
+  else if (personal.animationClass === "lose") vibrate([120]);
+}
+
+function resultOutcomeForViewer(game, room) {
+  const delta = game.result?.scoreDelta || { NS: 0, EW: 0 };
+  const ns = Number(delta.NS || 0);
+  const ew = Number(delta.EW || 0);
+  const winnerTeam = ns === ew ? null : (ns > ew ? "NS" : "EW");
+  let viewerSeat = findSeatByUid(room, appState.uid, appState.clientId);
+  if (viewerSeat == null && appState.offline && !appState.spectator) viewerSeat = 2;
+  const viewerTeam = viewerSeat == null ? null : teamOf(viewerSeat);
+  if (!winnerTeam) {
+    return { viewerSeat, viewerTeam, winnerTeam, headline: "平手", badge: "平手", message: game.result?.passedOut ? "本副四家 Pass，沒有勝敗。" : "本副雙方分數相同。", animationClass: "draw" };
+  }
+  if (viewerSeat == null || appState.spectator) {
+    return { viewerSeat: null, viewerTeam: null, winnerTeam, headline: `${winnerTeam} 勝利`, badge: `${winnerTeam} 勝利`, message: `觀戰結果：${winnerTeam} 本副得分。`, animationClass: "spectator" };
+  }
+  const won = viewerTeam === winnerTeam;
+  return {
+    viewerSeat,
+    viewerTeam,
+    winnerTeam,
+    headline: won ? "勝利！" : "失敗",
+    badge: won ? `勝利｜${viewerTeam} 得分` : `失敗｜${winnerTeam} 得分`,
+    message: won ? `你是 ${seatName(viewerSeat)}（${viewerTeam}），本副獲勝。` : `你是 ${seatName(viewerSeat)}（${viewerTeam}），本副由 ${winnerTeam} 得分。`,
+    animationClass: won ? "win" : "lose"
+  };
 }
 function cardHtml(card, opts = {}) {
   const cls = ["card-face", cardColor(card), opts.small ? "small" : "", opts.playable ? "playable" : "", opts.disabled ? "disabled" : "", opts.selected ? "selected" : "", opts.winning ? "winning-card" : ""].filter(Boolean).join(" ");
