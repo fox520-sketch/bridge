@@ -1,4 +1,4 @@
-const CACHE_NAME = "contract-bridge-v1-0-19-secure-actions-chicago-undo-report";
+const CACHE_NAME = "contract-bridge-v1-0-20-host-failover-chicago-mobile-diagnostics";
 const ASSETS = [
   "./",
   "./index.html",

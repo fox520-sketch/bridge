@@ -1,4 +1,4 @@
-# v1.0.19 防作弊資料拆分實作
+# v1.0.20 防作弊資料拆分與 action 仲裁
 
 本版已把多人真人局從「公開整份房間狀態」改成「公開牌局狀態 + 各座位私人手牌」。仍保留純前端房主仲裁，因此可防止一般非房主玩家讀取公開房間節點偷看手牌，但競賽級防作弊仍需要可信伺服器或 Cloud Functions。
 
@@ -33,7 +33,7 @@ roomUndo/{code}
 
 - UI 層只顯示授權手牌：自己、首攻後的夢家、結束後回放。
 - 牌局健康檢查會顯示防作弊資料拆分設計提醒。
-- `database.rules.secure.example.json` 提供 future split path 的規則範例。
+- `database.rules.secure.example.json` 提供 split path、action 提交、房主處理 action 與房主轉移的規則範例。
 - `initialHands` 保留牌譜 / 回放用途，牌局結束後才應對所有玩家公開。
 
 ## 部署提醒
@@ -45,3 +45,13 @@ roomUndo/{code}
 3. 房主 / 裁判流程用 Cloud Function 或受限 host 權限處理動作驗證
 4. 部署 `database.rules.secure.example.json` 並停用父節點公開讀取
 
+
+
+## v1.0.20 新增仲裁保護
+
+- 每個真人 action 都帶 `clientActionId`，用來辨識同一裝置的重試 / 連點。
+- 房主處理 action 前會用 Realtime Database transaction 將 action 標記為 `processing`，避免兩個仲裁者同時處理。
+- 牌局會保存最近一批 `processedActions` 指紋，若同一 action 又出現會寫入 actionAudit 並忽略。
+- 原房主離線時，仍在線的真人玩家會自動接任 `meta.hostUid`，牌局可繼續驗證與推進。
+
+限制：純前端仲裁仍然信任目前房主瀏覽器；若要競賽級防作弊，仍建議將 action 驗證移到 Cloud Functions 或可信伺服器。

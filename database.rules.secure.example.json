@@ -8,7 +8,8 @@
         ".write": "auth != null && (!data.exists() || data.child('meta/hostUid').val() == auth.uid || newData.child('meta/hostUid').val() == auth.uid)",
         "actions": {
           "$action": {
-            ".write": "auth != null && newData.hasChildren(['uid','actorSeat','seat','type','createdAt']) && newData.child('uid').val() == auth.uid"
+            ".read": "auth != null",
+            ".write": "auth != null && ((newData.exists() && !data.exists() && newData.hasChildren(['uid','actorSeat','seat','type','createdAt']) && newData.child('uid').val() == auth.uid) || root.child('rooms/'+$room+'/meta/hostUid').val() == auth.uid)"
           }
         }
       }

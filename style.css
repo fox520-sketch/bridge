@@ -664,3 +664,108 @@ button .suit-symbol.black,
 .match-history { display: grid; gap: 4px; padding: 8px 0 0; font-size: .82rem; color: var(--muted); }
 .match-history span { display: block; border: 1px solid var(--line); border-radius: 10px; padding: 5px 8px; background: rgba(255,255,255,.45); }
 .security-list li span { line-height: 1.35; }
+
+/* v1.0.20: host failover, richer Chicago summary, and mobile dedicated table */
+.chicago-summary {
+  margin-top: 10px;
+  border: 1px solid color-mix(in srgb, var(--ok), var(--line) 55%);
+  background: color-mix(in srgb, var(--ok), transparent 92%);
+  border-radius: 14px;
+  padding: 10px;
+  line-height: 1.45;
+}
+.chicago-summary b { display: block; margin-bottom: 4px; }
+.chicago-summary p { margin: 0 0 6px; color: var(--ink); font-weight: 900; }
+.chicago-summary ol { margin: 0; padding-left: 1.4em; color: var(--muted); font-size: .86rem; }
+.host-tools .button-row button[id*="Undo"] { border-color: color-mix(in srgb, var(--warn), var(--line) 40%); color: var(--warn); }
+
+@media (max-width: 760px) {
+  body { --card-w: 54px; --card-h: 78px; }
+  body.touch-comfort { --card-w: 62px; --card-h: 90px; }
+  .game {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .turn-alert { order: 0; position: sticky; top: 6px; z-index: 42; }
+  .mobile-quick-nav { order: 1; }
+  .table-wrap { order: 2; display: flex; flex-direction: column; gap: 10px; }
+  .left-panel { order: 3; }
+  .right-panel { order: 4; }
+  .table {
+    height: min(66vh, 540px);
+    min-height: 460px;
+    border-radius: 28px;
+    border-width: 7px;
+  }
+  .seat {
+    width: 142px;
+    min-height: 78px;
+    padding: 7px;
+    border-radius: 14px;
+    font-size: .78rem;
+  }
+  .seat-head { margin-bottom: 2px; }
+  .seat-meta { font-size: .72rem; line-height: 1.25; }
+  .seat-tags { gap: 3px; margin-top: 3px; }
+  .tag { font-size: .63rem; padding: 1px 5px; }
+  .seat-mini-hand { max-height: 42px; gap: 2px; }
+  .mini-card { min-width: 21px; height: 28px; font-size: .62rem; border-radius: 6px; }
+  .seat-0 { top: 8px; }
+  .seat-1 { right: 4px; top: 51%; }
+  .seat-2 { bottom: 8px; }
+  .seat-3 { left: 4px; top: 51%; }
+  .center { width: 62%; min-height: 170px; }
+  .trick-area { min-height: 150px; }
+  .play-0 { top: 32%; }
+  .play-1 { left: 66%; }
+  .play-2 { top: 68%; }
+  .play-3 { left: 34%; }
+  .table-trump, .table-heads { padding: 6px 9px; font-size: .8rem; max-width: 78%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .table-trump { top: 42%; }
+  .table-heads { top: calc(42% + 36px); }
+  .hand-panel {
+    position: sticky;
+    bottom: calc(4px + env(safe-area-inset-bottom));
+    z-index: 36;
+    border-radius: 20px;
+    padding: 10px;
+    box-shadow: 0 -14px 44px rgba(15,23,42,.18), var(--shadow);
+  }
+  .hand-header { gap: 8px; margin-bottom: 6px; }
+  .hand-header h3 { font-size: 1rem; }
+  #handHint { font-size: .8rem; margin: 2px 0 0; }
+  .hand-header-tools { gap: 6px; }
+  .hand-analysis { max-height: 58px; overflow: auto; margin-bottom: 6px; }
+  .hand-chip { padding: 4px 7px; font-size: .82rem; }
+  .inline-actions {
+    position: sticky;
+    bottom: calc(112px + env(safe-area-inset-bottom));
+    z-index: 37;
+    margin-bottom: 8px;
+  }
+  .inline-actions .auction-controls { max-height: 36vh; overflow: auto; }
+  .inline-actions .bid-grid { grid-template-columns: repeat(4, minmax(48px, 1fr)); }
+  .action-grid.bid-grid { grid-template-columns: repeat(4, minmax(48px, 1fr)); }
+  .hand {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding: 9px 3px 13px;
+    min-height: 96px;
+    scroll-snap-type: x proximity;
+  }
+  .hand .card-face { flex: 0 0 var(--card-w); scroll-snap-align: center; }
+  .card-face .rank { font-size: 1rem; }
+  .card-face .suit { font-size: 1.18rem; }
+  .card-face.playable { transform: translateY(-6px); }
+  .card-face.selected { transform: translateY(-10px); }
+  .left-panel.panel {
+    display: grid;
+    gap: 10px;
+  }
+  .phase-card, .contract, .scoreboard, .actions, .player-tips, .deal-progress-card, .wait-card, .room-status-card, .host-tools { margin-bottom: 0; }
+  .left-panel .actions { position: sticky; bottom: calc(130px + env(safe-area-inset-bottom)); z-index: 32; }
+  .game-controls-grid, .host-tools .button-row { grid-template-columns: 1fr; }
+  .toast { bottom: calc(104px + env(safe-area-inset-bottom)); max-width: calc(100% - 24px); text-align: center; }
+}

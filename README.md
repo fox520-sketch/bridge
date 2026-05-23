@@ -2,13 +2,14 @@
 
 這個版本由原本的「拿破崙與秘書」網頁遊戲改成 4 人合約橋牌。保留原專案的靜態網站部署方式、PWA、Firebase 開房間、QR 邀請、觀戰、電腦補位、分享、統計、備份與維護工具。
 
-## 最新版本 v1.0.19-secure-actions-chicago-undo-report
+## 最新版本 v1.0.20-host-failover-chicago-mobile-diagnostics
 
-- 多人牌局正式拆分公開狀態與私人手牌：公開 `rooms/{code}/game` 不保存四家手牌，手牌改寫入 `roomPrivateHands/{code}/{seat}`。
-- 新增動作提交 / 房主驗證第一版：真人只送出叫牌或出牌意圖，房主端驗證 UID、座位、輪到者、合法叫牌與跟牌規則後才更新牌局。
-- 新增 Chicago 四副制與總分表，可在單人或多人房間選擇四副累計總分。
-- 房主新增撤銷上一動作與重打本副，處理誤觸或同步錯誤更方便。
-- 新增詳細錯誤回報，包含版本、房號、階段、叫牌、桌面牌、健康檢查、最近 log、公開狀態與 action audit。
+- 新增房主離線自動轉移：原房主離線時，系統會把仲裁權轉給仍在線的真人座位，讓 action queue 可繼續被處理。
+- action queue 加入處理鎖與重複防護：每個真人操作會帶 `clientActionId`，房主處理時會記錄 `processedActions`，避免重連或連點造成同一動作重複套用。
+- Chicago 四副制加入完整賽後總結：四副明細、總分、勝方與分差會在分數區顯示。
+- 房主工具新增「撤銷整墩」與「撤銷到叫牌結束」，比只撤銷上一動作更適合處理誤觸。
+- 手機版牌桌重排：手牌固定在底部、桌面縮放更適合手機、叫牌與操作區在小螢幕更容易點。
+- 一鍵錯誤回報新增 JSON 快照下載與 Firebase 診斷資訊，包含房主座位、待處理 actions、被拒動作數、schema 與版本。
 
 
 ## 遊戲模式
@@ -45,7 +46,7 @@
 5. 人數不足時房主可以補電腦。
 6. 房主開始對戰。
 
-> 注意：v1.0.19 已把多人牌局改成 `rooms/{code}/game` 公開狀態 + `roomPrivateHands/{code}/{seat}` 私人手牌。一般玩家部署新版 `database.rules.json` 即可運作；若要加強手牌讀取限制，請改用 `database.rules.secure.example.json`。純前端仍信任房主裝置；競賽級防作弊仍建議 Cloud Functions 或可信伺服器。
+> 注意：v1.0.20 延續 v1.0.19 的多人牌局防作弊拆分，並新增房主轉移與 action 防重複處理。多人牌局仍改成 `rooms/{code}/game` 公開狀態 + `roomPrivateHands/{code}/{seat}` 私人手牌。一般玩家部署新版 `database.rules.json` 即可運作；若要加強手牌讀取限制，請改用 `database.rules.secure.example.json`。純前端仍信任房主裝置；競賽級防作弊仍建議 Cloud Functions 或可信伺服器。
 
 ## 單人離線
 

@@ -1,5 +1,14 @@
 # 合約橋牌版本紀錄
 
+## v1.0.20-host-failover-chicago-mobile-diagnostics
+- 新增房主離線自動轉移，仍在線的真人座位可接任房主 / 仲裁者，讓 action queue 不會因原房主離線而卡住。
+- action queue 加入 transaction 處理鎖、clientActionId 與 processedActions，避免重連或連點造成同一叫牌 / 出牌重複處理。
+- Chicago 四副制新增完整賽後總結，包含四副明細、總分、勝方與分差。
+- 房主工具新增撤銷整墩、撤銷到叫牌結束，並保留重打本副與撤銷上一動作。
+- 手機版牌桌改成更適合手機操作的布局：手牌固定底部、牌桌縮放、叫牌與操作更容易點。
+- 錯誤回報新增 JSON 快照下載與 Firebase 診斷資訊。
+- Service Worker 快取版本更新為 `contract-bridge-v1-0-20-host-failover-chicago-mobile-diagnostics`。
+
 ## v1.0.19-secure-actions-chicago-undo-report
 
 - 多人牌局正式拆分公開狀態與私人手牌：公開 `rooms/{code}/game` 不再保存四家 `hands` / `initialHands`，改由 `roomPrivateHands/{code}/{seat}` 保存目前手牌與原始手牌。
@@ -46,8 +55,6 @@
 - 房主新增「接管目前輪到者」，方便只處理卡住的離線座位。
 - 清理右側牌局紀錄重複摘要。
 - 更新 Service Worker 快取版本為 `contract-bridge-v1-0-15-wait-countdown-offline-control`。
-
-# Bridge Firebase Game Release Notes
 
 ## v1.0.14-turn-alert-ingame-coach
 
@@ -115,8 +122,6 @@
 - 保留 v1.0.5 的 AI 叫牌 / 出牌 2 秒真人模擬延遲。
 - 更新 Service Worker 快取版本為 `contract-bridge-v1-0-6-trick-clear-delay`。
 
-# Bridge Firebase Game Release Notes
-
 ## v1.0.5-ai-human-delay
 - AI 叫牌與出牌改為等待 2 秒後才執行，讓電腦玩家節奏更像真人。
 - 真人玩家操作不延遲；只有座位類型為電腦時才套用等待。
@@ -126,8 +131,6 @@
 - 修正牌桌座位區的小牌顯示，紅心與方塊現在會以紅色呈現。
 - 保留黑桃與梅花為黑色，包含牌桌可見手牌與夢家小牌。
 - 更新 Service Worker 快取版本為 `contract-bridge-v1-0-4-red-suits-on-table`。
-
-# Bridge Release Notes
 
 ## v1.0.3 - Firebase 陣列同步修正
 
