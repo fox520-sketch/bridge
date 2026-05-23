@@ -8,9 +8,9 @@
   <meta name="theme-color" content="#087ea4" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="合約橋牌" />
-  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="manifest" href="manifest.webmanifest?v=bridge-v1.0.24.2-stable-rebased-v23" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=bridge-v1.0.24.2-stable-rebased-v23" />
 </head>
 <body>
   <div id="app">
@@ -177,15 +177,6 @@
                 <option value="chicago16">Chicago 16 副制</option>
             </select>
           </label>
-          <label class="mini-field">
-            <span>叫牌制度</span>
-            <select id="offlineBiddingSystem">
-              <option value="beginner" selected>新手自然制</option>
-              <option value="sayc">SAYC 風格</option>
-              <option value="simplified">簡化模式：不用 Double</option>
-              <option value="teaching">教學模式：理由更白話</option>
-            </select>
-          </label>
           <button id="btnStartOffline" class="primary" type="button">單人離線開始</button>
         </div>
       </div>
@@ -218,19 +209,6 @@
         <button id="btnRunDiagnostics" class="ghost" type="button">執行系統測試</button>
       </div>
 
-      <div class="tool-card debug-recorder-card">
-        <div>
-          <h3>實戰測試紀錄器</h3>
-          <p class="hint">自動記錄進房、開局、叫牌、出牌、結算與同步狀態。遇到問題可下載 debug-report.json 給開發者分析。</p>
-          <p class="hint compact">報告會包含最近事件、錯誤回報、Firebase 診斷與本機統計，不會額外上傳資料。</p>
-        </div>
-        <div class="tool-actions">
-          <button id="btnDownloadDebugReport" class="ghost" type="button">下載 debug-report.json</button>
-          <button id="btnCopyDebugReport" class="ghost" type="button">複製 Debug 報告</button>
-          <button id="btnClearDebugEvents" class="ghost" type="button">清除測試紀錄</button>
-        </div>
-      </div>
-
       <div class="tool-card stats-card">
         <div>
           <h3>本機統計與維護</h3>
@@ -242,8 +220,6 @@
           <button id="btnShowLocalStats" class="ghost" type="button">更新統計</button>
           <button id="btnShareStats" class="ghost" type="button">分享戰績</button>
           <button id="btnShareAchievements" class="ghost" type="button">分享成就</button>
-          <button id="btnDownloadHistory" class="ghost" type="button">下載牌局歷史</button>
-          <button id="btnClearHistory" class="ghost" type="button">清除歷史</button>
           <button id="btnExportLocalData" class="ghost" type="button">匯出資料</button>
           <button id="btnImportLocalData" class="ghost" type="button">還原資料</button>
           <button id="btnCopyErrorReport" class="ghost" type="button">複製錯誤回報</button>
@@ -256,7 +232,7 @@
       <div class="tool-card deploy-test-card">
         <div>
           <h3>實機測試與部署檢查</h3>
-          <p class="hint">v1.0.24.1 修正啟動保護；v1.0.24 新增 debug-report.json、叫牌制度、回放升級、牌局歷史與手機操作細修。可用一台裝置切換 N/E/S/W 視角，或檢查 Auth、Database、私人手牌與 action queue 基礎路徑。</p>
+          <p class="hint">v1.0.23 新增四座位視角模擬與 Firebase 部署檢查器。可用一台裝置切換 N/E/S/W 視角，或檢查 Auth、Database、私人手牌與 action queue 基礎路徑。</p>
           <div id="deploymentCheckStatus" class="diagnostic-status deploy-check-status">尚未執行 Firebase 部署檢查。</div>
         </div>
         <div class="tool-actions">
@@ -381,16 +357,6 @@
                 <option value="chicago16">Chicago 16 副制｜16 副總分</option>
               </select>
               <small>Chicago 可選 4 / 8 / 12 / 16 副，身價依四副循環，結束後產生賽後報告。</small>
-            </label>
-            <label class="field">
-              <span>叫牌制度</span>
-              <select id="lobbyBiddingSystem">
-                <option value="beginner" selected>新手自然制｜保守少約定</option>
-                <option value="sayc">SAYC 風格｜五張高花、15–17 1NT、Stayman / Transfer</option>
-                <option value="simplified">簡化模式｜不使用 Double / Redouble</option>
-                <option value="teaching">教學模式｜每個叫品理由更白話</option>
-              </select>
-              <small>會影響 AI 叫牌、教練建議與叫牌按鈕合法性；簡化模式會關閉 Double / Redouble。</small>
             </label>
             <label class="check"><input id="showAiThoughts" type="checkbox" checked /> 顯示 AI 思路紀錄</label>
             <label class="check"><input id="allowSpectators" type="checkbox" checked /> 開放觀戰加入</label>
@@ -600,7 +566,7 @@
         <p class="eyebrow">Release</p>
         <h2>本版更新</h2>
         <ul>
-          <li>v1.0.24.1：修正初始化中斷可能造成版本資訊不顯示、按鈕無反應；v1.0.24：新增實戰測試紀錄器 / debug-report.json、叫牌制度選項、回放升級、牌局歷史與手機誤觸防護。</li>
+          <li>v1.0.24.2：從穩定的 v1.0.23 重新打包，移除造成 v1.0.24 啟動中斷的變更，並加入快取破除參數。</li>
           <li class="old-note">v1.0.23：新增四人座位視角模擬、Firebase 部署檢查器、出牌 AI 第三版、正式大廳與新手教學第三章。</li>
           <li class="old-note">v1.0.22：Firebase rules 正式強化，私人手牌、action queue 與房主/仲裁者權限分流更清楚。</li>
           <li>房主 / 仲裁者轉移再強化：房主離線超過安全等待時間後，新仲裁者用交易式寫入接手，降低雙房主風險。</li>
@@ -648,8 +614,7 @@
           <article><h3>標準夢家模式</h3><p>莊家左手首攻。首攻翻開後，夢家攤牌，夢家的牌由莊家指揮。夢家本人不能自行建議或出牌。</p></article>
           <article><h3>閉手變體模式</h3><p>取消夢家。首攻後同伴牌仍不公開，四個真人或電腦都自行決定自己的出牌。叫牌與計分仍沿用合約橋牌。</p></article>
           <article><h3>計分</h3><p>低花每線位墩 20，高花 30，NT 第一墩 40 後續 30。基本分達 100 是成局；滿貫與身價會增加獎分或罰分。</p></article>
-          <article><h3>叫牌制度</h3><p>可選新手自然制、SAYC 風格、簡化模式或教學模式；簡化模式會關閉 Double / Redouble。</p></article>
-          <article><h3>回放檢討</h3><p>回放支援逐墩跳轉、速度設定、合法牌與教練建議，方便檢討每一次出牌。</p></article>
+          <article><h3>新手任務第二章</h3><p>牌局右側「檢討」分頁會帶你練習合約目標、王牌 / 無王、成局線與結算得分。</p></article>
         </div>
         <div class="button-row dialog-actions">
           <button id="btnTutorialEnableHints" class="primary" type="button">開啟玩家提示</button>
@@ -737,12 +702,9 @@
         <p id="replaySummary" class="hint"></p>
         <div class="button-row replay-actions"><button id="btnShareReplay" class="ghost" type="button">分享回放摘要</button><button id="btnCopyHandRecordReplay" class="ghost" type="button">複製完整牌譜</button></div>
         <div class="replay-step-controls">
-          <button id="btnReplayPrevTrick" class="ghost" type="button">上一墩</button>
           <button id="btnReplayPrev" class="ghost" type="button">上一步</button>
           <select id="replayStepSelect" aria-label="回放步驟"></select>
           <button id="btnReplayNext" class="ghost" type="button">下一步</button>
-          <button id="btnReplayNextTrick" class="ghost" type="button">下一墩</button>
-          <label class="mini-field replay-speed-field"><span>速度</span><select id="replaySpeed"><option value="500">0.5 秒</option><option value="900" selected>0.9 秒</option><option value="1500">1.5 秒</option><option value="2500">2.5 秒</option></select></label>
           <button id="btnReplayPlay" class="primary" type="button">自動播放</button>
         </div>
         <div id="replayStepView" class="replay-step-view"></div>
@@ -761,6 +723,6 @@
     <footer id="versionFooter" class="version-footer"></footer>
     <div id="toast" class="toast hidden"></div>
   </div>
-  <script type="module" src="app.js"></script>
+  <script type="module" src="app.js?v=bridge-v1.0.24.2-stable-rebased-v23"></script>
 </body>
 </html>

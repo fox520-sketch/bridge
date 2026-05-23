@@ -1,10 +1,10 @@
-const CACHE_NAME = "contract-bridge-v1-0-24-1-boot-guard";
+const CACHE_NAME = "contract-bridge-v1-0-24-2-stable-rebased-v23";
 const ASSETS = [
   "./",
   "./index.html",
-  "./style.css",
-  "./app.js",
-  "./manifest.webmanifest",
+  "./style.css?v=bridge-v1.0.24.2-stable-rebased-v23",
+  "./app.js?v=bridge-v1.0.24.2-stable-rebased-v23",
+  "./manifest.webmanifest?v=bridge-v1.0.24.2-stable-rebased-v23",
   "./icons/icon-192.png",
   "./icons/icon-512.png"
 ];

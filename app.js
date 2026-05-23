@@ -1,5 +1,5 @@
-const BUILD = "bridge-v1.0.24.1-boot-guard";
-const ROOM_SCHEMA_VERSION = 66;
+const BUILD = "bridge-v1.0.24.2-stable-rebased-v23";
+const ROOM_SCHEMA_VERSION = 67;
 const SEATS = [
   { id: 0, key: "N", name: "北", team: "NS" },
   { id: 1, key: "E", name: "東", team: "EW" },
@@ -43,10 +43,7 @@ const STORAGE = {
   tutorialChapter1: "bridge.tutorial.chapter1",
   tutorialChapter2: "bridge.tutorial.chapter2",
   tutorialChapter3: "bridge.tutorial.chapter3",
-  testViewSeat: "bridge.testViewSeat",
-  debugEvents: "bridge.debugEvents",
-  biddingSystem: "bridge.biddingSystem",
-  replaySpeed: "bridge.replaySpeed"
+  testViewSeat: "bridge.testViewSeat"
 };
 const firebaseConfig = {
   apiKey: "AIzaSyDbOGwdYNY4mFG8Sgy8w_QdJpziWVoNx10",
@@ -95,78 +92,49 @@ const appState = {
   lastHostTransferAttemptAt: 0,
   lastArbiterNoticeKey: null,
   testViewSeat: null,
-  testMode: false,
-  debugEvents: []
+  testMode: false
 };
 
-function initStep(label, fn) {
-  try { return fn(); }
-  catch (error) {
-    console.error(`初始化步驟失敗：${label}`, error);
-    const footer = $("versionFooter");
-    if (footer && !footer.textContent) footer.textContent = `合約橋牌 ${BUILD}｜初始化警告：${label}`;
-    const status = $("diagnosticOutput");
-    if (status) status.textContent = `初始化警告：${label}
-${error?.message || error}`;
-    return null;
-  }
-}
-
 function init() {
-  initStep("版本資訊", () => {
-    const footer = $("versionFooter");
-    if (footer) footer.textContent = `合約橋牌 ${BUILD}｜標準夢家／閉手變體｜Firebase 多人房間`;
-  });
-  initStep("玩家識別", () => {
-    appState.clientId = ensureClientId();
-    appState.localUid = `local-${appState.clientId}`;
-    appState.uid = appState.localUid;
-  });
-  initStep("偏好設定", () => {
-    applyTheme(loadSetting(STORAGE.theme, "auto"));
-    watchSystemTheme();
-    $("playerName").value = localStorage.getItem(STORAGE.name) || randomGuestName();
-    $("themeSelect").value = loadSetting(STORAGE.theme, "auto");
-    setCheckbox("hintToggle", getBool(STORAGE.hints, true));
-    setCheckbox("soundToggle", getBool(STORAGE.sound, false));
-    setCheckbox("vibrationToggle", getBool(STORAGE.vibration, false));
-    setCheckbox("touchComfortToggle", getBool(STORAGE.touch, false));
-    applyMobileSafetyDefaults();
-    setCheckbox("confirmPlayToggle", getBool(STORAGE.confirmPlay, false));
-    const offlineBidding = $("offlineBiddingSystem");
-    if (offlineBidding) offlineBidding.value = loadSetting(STORAGE.biddingSystem, "beginner");
-    const handSortSelect = $("handSortMode");
-    if (handSortSelect) handSortSelect.value = loadSetting(STORAGE.handSortMode, "suit");
-    $("soundProfile").value = loadSetting(STORAGE.soundProfile, "soft");
-    applyPlayerHintsVisible(getBool(STORAGE.hints, true));
-    applyTouchComfort();
-    applyPlayConfirmMode();
-    applyLogVisibility(getBool(STORAGE.logVisible, false));
-  });
-  initStep("邀請房號", () => {
-    const roomFromUrl = getInviteRoomFromLocation();
-    if (roomFromUrl) {
-      appState.pendingInviteRoom = roomFromUrl;
-      $("roomCode").value = roomFromUrl;
-      $("connectStatus").textContent = `偵測到邀請房號 ${roomFromUrl}，正在自動連線並加入…`;
-    } else {
-      const last = localStorage.getItem(STORAGE.lastRoom);
-      const at = Number(localStorage.getItem(STORAGE.lastRoomAt) || 0);
-      if (last && Date.now() - at < 1000 * 60 * 60 * 12) $("roomCode").placeholder = `上次房號 ${last}`;
-    }
-  });
-  initStep("按鈕事件", bindEvents);
-  initStep("背景更新", () => {
-    if (appState.pendingInviteRoom) setTimeout(autoJoinInviteRoom, 250);
-    startUiTicker();
-  });
-  initStep("本機資料", () => {
-    appState.testViewSeat = loadTestViewSeat();
-    appState.debugEvents = loadDebugEvents();
-    renderLocalStatsSummary();
-    renderReleaseChecklist();
-  });
-  initStep("新手導覽", showOnboardingIfFirstVisit);
+  appState.clientId = ensureClientId();
+  appState.localUid = `local-${appState.clientId}`;
+  appState.uid = appState.localUid;
+  applyTheme(loadSetting(STORAGE.theme, "auto"));
+  watchSystemTheme();
+  $("playerName").value = localStorage.getItem(STORAGE.name) || randomGuestName();
+  $("themeSelect").value = loadSetting(STORAGE.theme, "auto");
+  setCheckbox("hintToggle", getBool(STORAGE.hints, true));
+  setCheckbox("soundToggle", getBool(STORAGE.sound, false));
+  setCheckbox("vibrationToggle", getBool(STORAGE.vibration, false));
+  setCheckbox("touchComfortToggle", getBool(STORAGE.touch, false));
+  setCheckbox("confirmPlayToggle", getBool(STORAGE.confirmPlay, false));
+  const handSortSelect = $("handSortMode");
+  if (handSortSelect) handSortSelect.value = loadSetting(STORAGE.handSortMode, "suit");
+  $("soundProfile").value = loadSetting(STORAGE.soundProfile, "soft");
+  applyPlayerHintsVisible(getBool(STORAGE.hints, true));
+  applyTouchComfort();
+  applyPlayConfirmMode();
+  applyLogVisibility(getBool(STORAGE.logVisible, false));
+
+  const roomFromUrl = getInviteRoomFromLocation();
+  if (roomFromUrl) {
+    appState.pendingInviteRoom = roomFromUrl;
+    $("roomCode").value = roomFromUrl;
+    $("connectStatus").textContent = `偵測到邀請房號 ${roomFromUrl}，正在自動連線並加入…`;
+  } else {
+    const last = localStorage.getItem(STORAGE.lastRoom);
+    const at = Number(localStorage.getItem(STORAGE.lastRoomAt) || 0);
+    if (last && Date.now() - at < 1000 * 60 * 60 * 12) $("roomCode").placeholder = `上次房號 ${last}`;
+  }
+
+  bindEvents();
+  if (appState.pendingInviteRoom) setTimeout(autoJoinInviteRoom, 250);
+  startUiTicker();
+  renderLocalStatsSummary();
+  renderReleaseChecklist();
+  appState.testViewSeat = loadTestViewSeat();
+  $("versionFooter").textContent = `合約橋牌 ${BUILD}｜標準夢家／閉手變體｜Firebase 多人房間`;
+  showOnboardingIfFirstVisit();
 }
 
 function bindEvents() {
@@ -177,16 +145,11 @@ function bindEvents() {
   $("btnQuickMultiplayer").addEventListener("click", () => $("roomCode").scrollIntoView({ behavior: "smooth", block: "center" }));
   $("btnRunAiTest").addEventListener("click", runAiHealthCheck);
   $("btnRunDiagnostics").addEventListener("click", runDiagnostics);
-  $("btnDownloadDebugReport")?.addEventListener("click", downloadDebugReport);
-  $("btnCopyDebugReport")?.addEventListener("click", copyDebugReport);
-  $("btnClearDebugEvents")?.addEventListener("click", clearDebugEvents);
   $("btnStartSeatSimulator")?.addEventListener("click", startSeatSimulatorGame);
   $("btnRunFirebaseDeployCheck")?.addEventListener("click", runFirebaseDeploymentCheck);
   $("btnShowLocalStats").addEventListener("click", renderLocalStatsSummary);
   $("btnShareStats").addEventListener("click", shareLocalStats);
   $("btnShareAchievements").addEventListener("click", shareAchievements);
-  $("btnDownloadHistory")?.addEventListener("click", downloadGameHistory);
-  $("btnClearHistory")?.addEventListener("click", clearGameHistory);
   $("btnExportLocalData").addEventListener("click", exportLocalData);
   $("btnImportLocalData").addEventListener("click", () => $("importDataDialog").showModal());
   $("btnPasteCurrentBackup").addEventListener("click", () => { $("importDataText").value = JSON.stringify(collectLocalData(), null, 2); });
@@ -219,8 +182,6 @@ function bindEvents() {
   $("difficulty").addEventListener("input", () => { $("difficultyLabel").textContent = $("difficulty").value; hostUpdateSettingsFromLobby(); });
   $("lobbyPacing")?.addEventListener("change", hostUpdateSettingsFromLobby);
   $("lobbyScoringMode")?.addEventListener("change", hostUpdateSettingsFromLobby);
-  $("lobbyBiddingSystem")?.addEventListener("change", hostUpdateSettingsFromLobby);
-  $("offlineBiddingSystem")?.addEventListener("change", () => localStorage.setItem(STORAGE.biddingSystem, $("offlineBiddingSystem")?.value || "beginner"));
   $("allowSpectators")?.addEventListener("change", hostUpdateSettingsFromLobby);
   $("allowBotFill")?.addEventListener("change", hostUpdateSettingsFromLobby);
   $("btnToggleReady")?.addEventListener("click", toggleMyReady);
@@ -294,9 +255,6 @@ function bindEvents() {
   $("btnReplayPrev")?.addEventListener("click", () => moveReplayStep(-1));
   $("btnReplayNext")?.addEventListener("click", () => moveReplayStep(1));
   $("btnReplayPlay")?.addEventListener("click", autoPlayReplay);
-  $("btnReplayPrevTrick")?.addEventListener("click", () => moveReplayTrick(-1));
-  $("btnReplayNextTrick")?.addEventListener("click", () => moveReplayTrick(1));
-  $("replaySpeed")?.addEventListener("change", (e) => localStorage.setItem(STORAGE.replaySpeed, String(e.target.value || "900")));
   $("replayStepSelect")?.addEventListener("change", (e) => setReplayStep(Number(e.target.value || 0)));
   $("btnRecordDrawerToggle")?.addEventListener("click", toggleRecordDrawer);
   document.querySelectorAll("[data-test-view-seat]").forEach((btn) => btn.addEventListener("click", () => setTestViewSeat(btn.dataset.testViewSeat)));
@@ -369,68 +327,6 @@ function setVibrationEnabled(v) { localStorage.setItem(STORAGE.vibration, String
 function setTouchComfortEnabled(v) { localStorage.setItem(STORAGE.touch, String(v)); setCheckbox("touchComfortToggle", v); applyTouchComfort(); }
 function applyTouchComfort() { document.body.classList.toggle("touch-comfort", getBool(STORAGE.touch, false)); }
 function applyPlayConfirmMode() { document.body.classList.toggle("confirm-play-mode", getBool(STORAGE.confirmPlay, false)); }
-function isMobileViewport() { return typeof matchMedia === "function" && matchMedia("(max-width: 760px), (pointer: coarse)").matches; }
-function applyMobileSafetyDefaults() {
-  if (localStorage.getItem(STORAGE.confirmPlay) == null && isMobileViewport()) localStorage.setItem(STORAGE.confirmPlay, "true");
-}
-function loadDebugEvents() {
-  try { return JSON.parse(localStorage.getItem(STORAGE.debugEvents) || "[]").slice(-250); }
-  catch { return []; }
-}
-function saveDebugEvents(events) {
-  localStorage.setItem(STORAGE.debugEvents, JSON.stringify((events || []).slice(-250)));
-}
-function recordDebugEvent(type, detail = {}) {
-  try {
-    const event = { at: Date.now(), type, detail, build: BUILD, room: appState.roomCode || null, status: appState.room?.meta?.status || null, phase: appState.room?.game?.phase || null, uid: appState.uid ? String(appState.uid).slice(0, 12) : null };
-    appState.debugEvents = [...(appState.debugEvents || loadDebugEvents()), event].slice(-250);
-    saveDebugEvents(appState.debugEvents);
-  } catch (error) {
-    console.warn("debug recorder failed", error);
-  }
-}
-function buildDebugReport() {
-  return {
-    build: BUILD,
-    exportedAt: new Date().toISOString(),
-    userAgent: navigator.userAgent,
-    url: location.href,
-    localSettings: collectLocalData(),
-    debugEvents: loadDebugEvents(),
-    detailedErrorReport: buildDetailedErrorReport(),
-    stats: loadStats()
-  };
-}
-async function copyDebugReport() { await copyText(JSON.stringify(buildDebugReport(), null, 2)); toast("已複製 debug-report.json 內容"); }
-function downloadDebugReport() { downloadTextFile(`debug-report-${new Date().toISOString().replace(/[:.]/g, "-")}.json`, JSON.stringify(buildDebugReport(), null, 2), "application/json"); toast("已下載 debug-report.json"); }
-function clearDebugEvents() { appState.debugEvents = []; saveDebugEvents([]); toast("已清除本機實戰測試紀錄"); }
-function downloadTextFile(filename, text, type = "text/plain") {
-  const blob = new Blob([text], { type });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 500);
-}
-function normalizeBiddingSystem(value) {
-  return ["beginner", "sayc", "simplified", "teaching"].includes(String(value)) ? String(value) : "beginner";
-}
-function biddingSystemLabel(value) {
-  return ({ beginner: "新手自然制", sayc: "SAYC 風格", simplified: "簡化模式", teaching: "教學模式" })[normalizeBiddingSystem(value)] || "新手自然制";
-}
-function isSimplifiedBidding(settings = {}) { return normalizeBiddingSystem(settings?.biddingSystem || settings) === "simplified"; }
-function legalCallsForSettings(game, seat, settings = {}) {
-  const calls = legalCalls(game, seat);
-  if (isSimplifiedBidding(settings)) return calls.filter((c) => c.type !== "double" && c.type !== "redouble");
-  return calls;
-}
-function replaySpeedMs() {
-  const value = Number($("replaySpeed")?.value || localStorage.getItem(STORAGE.replaySpeed) || 900);
-  return [500, 900, 1500, 2500].includes(value) ? value : 900;
-}
 function setLogVisible(v) { localStorage.setItem(STORAGE.logVisible, String(v)); applyLogVisibility(v); }
 function applyLogVisibility(v) {
   document.body.classList.toggle("log-visible", v);
@@ -583,7 +479,6 @@ async function createRoom() {
   localStorage.setItem(STORAGE.lastRoomAt, String(now));
   updateRoomUrl(code);
   subscribeRoom(code);
-  recordDebugEvent("create-room", { code });
   toast(`已建立房間 ${code}`);
 }
 async function generateUniqueRoomCode() {
@@ -691,7 +586,6 @@ async function joinRoomByCode(code, spectator = false, fromInvite = false) {
   localStorage.setItem(STORAGE.lastRoomAt, String(Date.now()));
   updateRoomUrl(code);
   subscribeRoom(code);
-  recordDebugEvent("join-room", { code, spectator: appState.spectator, fromInvite });
   toast(appState.spectator ? `以觀戰加入 ${code}` : `已加入房間 ${code}`);
 }
 function subscribeRoom(code) {
@@ -703,7 +597,6 @@ function subscribeRoom(code) {
   appState.roomUnsub = appState.firebase.onValue(roomRef, (snap) => {
     const value = snap.val();
     if (!value) {
-      recordDebugEvent("room-missing", { code });
       toast("房間不存在或已刪除");
       leaveRoom(true);
       return;
@@ -718,7 +611,6 @@ function subscribeRoom(code) {
     maybeScheduleBot();
   }, (error) => {
     console.error(error);
-    recordDebugEvent("room-sync-error", { code, message: error?.message || String(error) });
     toast("房間同步失敗");
   });
 }
@@ -1072,7 +964,6 @@ function defaultSettingsFromUI(scope = "offline") {
       showAiThoughts: Boolean($("showAiThoughts")?.checked ?? true),
       pacingMs: sanitizePacingMs($("lobbyPacing")?.value || AI_ACTION_DELAY_MS),
       scoringMode: $("lobbyScoringMode")?.value || "single",
-      biddingSystem: $("lobbyBiddingSystem")?.value || "beginner",
       allowSpectators: Boolean($("allowSpectators")?.checked ?? true),
       allowBotFill: Boolean($("allowBotFill")?.checked ?? true)
     };
@@ -1084,7 +975,6 @@ function defaultSettingsFromUI(scope = "offline") {
     showAiThoughts: true,
     pacingMs: sanitizePacingMs($("offlinePacing")?.value || AI_ACTION_DELAY_MS),
     scoringMode: $("offlineScoringMode")?.value || "single",
-    biddingSystem: $("offlineBiddingSystem")?.value || loadSetting(STORAGE.biddingSystem, "beginner"),
     allowSpectators: true,
     allowBotFill: true
   };
@@ -1561,7 +1451,6 @@ async function hostStartGame() {
     actions: null,
     actionAudit: null
   };
-  recordDebugEvent("start-game", { room: appState.roomCode, boardNo: game.boardNo, scoringMode: settings.scoringMode, biddingSystem: settings.biddingSystem });
   await updateRoom(patch);
   $("resultOverlay").classList.add("hidden");
   playSfx("start");
@@ -1609,8 +1498,7 @@ function createNewGame(room) {
     processedActions: {},
     actionSerial: 0,
     result: null,
-    biddingSystem: settings.biddingSystem || "beginner",
-    log: [`第 ${boardNo} 副開始。${seatName(dealer)}發牌，身價：${vulnerabilityLabel(vulnerability)}，模式：${modeLabel(settings.mode)}，叫牌制度：${biddingSystemLabel(settings.biddingSystem)}。`],
+    log: [`第 ${boardNo} 副開始。${seatName(dealer)}發牌，身價：${vulnerabilityLabel(vulnerability)}，模式：${modeLabel(settings.mode)}。`],
     createdAt: Date.now(),
     updatedAt: Date.now()
   };
@@ -1653,7 +1541,6 @@ async function submitAction(action) {
   if (!game) return;
   playSfx("click");
   vibrate(10);
-  recordDebugEvent("submit-action", { type: action.type, seat: action.seat, call: action.call ? callText(action.call) : null, cardId: action.cardId || null, phase: game.phase });
   const fullAction = {
     ...action,
     uid: appState.uid,
@@ -1775,17 +1662,15 @@ function applyAction(game, action, lobby) {
   if (action.type === "play") return applyPlay(game, action, settings);
   return { ok: false, message: "未知操作" };
 }
-function applyCall(game, action, lobby = {}) {
+function applyCall(game, action) {
   normalizeGame(game);
   const seat = Number(action.seat);
   if (game.phase !== "auction") return { ok: false, message: "現在不是叫牌階段" };
   if (seat !== game.currentPlayer) return { ok: false, message: "還沒輪到你叫牌" };
   const call = normalizeCall(action.call);
-  if (isSimplifiedBidding(lobby?.settings) && ["double", "redouble"].includes(call.type)) return { ok: false, message: "簡化模式不使用 Double / Redouble" };
   if (!isLegalCall(game, call, seat)) return { ok: false, message: "不合法的叫品" };
   game.auction.push({ ...call, seat, at: Date.now() });
   game.log.push(`${seatName(seat)}：${callText(call)}`);
-  recordDebugEvent("apply-call", { seat, call: callText(call), room: appState.roomCode });
   const end = auctionEndState(game);
   if (end.ended) {
     if (!end.contract) {
@@ -1887,7 +1772,6 @@ function applyPlay(game, action, settings) {
   hand.splice(idx, 1);
   game.currentTrick.push({ seat, card });
   game.log.push(`${seatName(seat)} 出 ${card.label}`);
-  recordDebugEvent("apply-play", { seat, card: card.label, trickCards: game.currentTrick.length + 1, room: appState.roomCode });
   if (game.phase === "openingLead") {
     game.phase = "play";
     if (game.mode === "standard") {
@@ -2125,8 +2009,7 @@ function chooseBotCall(game, seat, lobby) {
 
 function naturalCallDecision(game, seat, lobby = {}) {
   normalizeGame(game);
-  const system = normalizeBiddingSystem(lobby?.settings?.biddingSystem || game.biddingSystem || loadSetting(STORAGE.biddingSystem, "beginner"));
-  const legal = legalCallsForSettings(game, seat, { biddingSystem: system });
+  const legal = legalCalls(game, seat);
   const hand = game.hands?.[seat] || [];
   const hcp = handHcp(hand);
   const shape = suitLengths(hand);
@@ -2140,28 +2023,23 @@ function naturalCallDecision(game, seat, lobby = {}) {
   const majors = ["S", "H"].filter((suit) => shape[suit] >= 5).sort((a, b) => shape[b] - shape[a] || suitHcp(hand, b) - suitHcp(hand, a));
   const sixSuit = ["S", "H", "D", "C"].find((suit) => shape[suit] >= 6);
   const team = teamOf(seat);
-  const systemName = biddingSystemLabel(system);
 
   if (!high) {
-    if (system === "simplified" && hcp >= 12) {
-      const suit = majors[0] || longestSuit;
-      return choose(bid(1, suit) || firstLegalBid(), `${systemName}：${hcp} HCP 達開叫牌力，只用自然花色 / NT，不使用複雜約定。`);
-    }
-    if (hcp >= 22 && bid(2, "C")) return choose(bid(2, "C"), `${systemName}：強牌 ${hcp} HCP，使用強 2♣ 開叫，表示有滿貫或成局潛力。`);
-    if (isBalanced(hand) && hcp >= 20 && hcp <= 21 && bid(2, "NT")) return choose(bid(2, "NT"), `${systemName}：均型 ${hcp} HCP，符合 20–21 點 2NT 開叫。`);
-    if (isBalanced(hand) && hcp >= 15 && hcp <= 17 && bid(1, "NT")) return choose(bid(1, "NT"), `${systemName}：均型 ${hcp} HCP，符合 15–17 點 1NT 開叫。`);
+    if (hcp >= 22 && bid(2, "C")) return choose(bid(2, "C"), `強牌 ${hcp} HCP，使用強 2♣ 開叫，表示有滿貫或成局潛力。`);
+    if (isBalanced(hand) && hcp >= 20 && hcp <= 21 && bid(2, "NT")) return choose(bid(2, "NT"), `均型 ${hcp} HCP，符合 20–21 點 2NT 開叫。`);
+    if (isBalanced(hand) && hcp >= 15 && hcp <= 17 && bid(1, "NT")) return choose(bid(1, "NT"), `均型 ${hcp} HCP，符合 15–17 點 1NT 開叫。`);
     if (hcp >= 12 || (hcp >= 11 && (shape["S"] >= 5 || shape["H"] >= 5 || shape[longestSuit] >= 6))) {
       const suit = majors[0] || longestSuit;
-      return choose(bid(1, suit) || firstLegalBid(), `${systemName}：${hcp} HCP，牌型 ${shapeText(hand)}；${system === "sayc" ? "SAYC 風格五張高花優先" : "自然制優先開五張高花"}，否則開最長花色 ${SUITS[suit].symbol}。`);
+      return choose(bid(1, suit) || firstLegalBid(), `${hcp} HCP，牌型 ${shapeText(hand)}；自然制優先開五張高花，否則開最長花色 ${SUITS[suit].symbol}。`);
     }
-    if (system !== "beginner" && difficulty >= 10 && sixSuit && shape[sixSuit] >= 6 && hcp >= 6 && hcp <= 10 && bid(2, sixSuit)) {
+    if (difficulty >= 10 && sixSuit && shape[sixSuit] >= 6 && hcp >= 6 && hcp <= 10 && bid(2, sixSuit)) {
       return choose(bid(2, sixSuit), `${hcp} HCP、${SUITS[sixSuit].symbol} 六張以上，採弱二開叫干擾對手。`);
     }
     const sevenSuit = ["S", "H", "D", "C"].find((suit) => shape[suit] >= 7);
-    if (system !== "beginner" && difficulty >= 12 && sevenSuit && hcp >= 5 && hcp <= 10 && bid(3, sevenSuit)) {
+    if (difficulty >= 12 && sevenSuit && hcp >= 5 && hcp <= 10 && bid(3, sevenSuit)) {
       return choose(bid(3, sevenSuit), `${hcp} HCP、${SUITS[sevenSuit].symbol} 七張長門，採三階阻擊叫。`);
     }
-    return pass(`${systemName}：${hcp} HCP 未達一般開叫牌力，先 Pass。`);
+    return pass(`${hcp} HCP 未達一般開叫牌力，先 Pass。`);
   }
 
   const partnerHigh = teamOf(high.seat) === team;
@@ -2183,13 +2061,6 @@ function naturalCallDecision(game, seat, lobby = {}) {
       if (isBalanced(hand) && hcp >= 12 && bid(3, "NT")) return choose(bid(3, "NT"), `${hcp} HCP 均型且未配合高花，考慮 3NT 成局。`);
       if (isBalanced(hand) && hcp >= 8 && bid(2, "NT")) return choose(bid(2, "NT"), `${hcp} HCP 均型，2NT 邀請同伴成局。`);
     } else {
-      if (system === "sayc" && high.level === 1) {
-        const fourMajor = ["S", "H"].find((suit) => shape[suit] >= 4);
-        const fiveMajor = ["S", "H"].find((suit) => shape[suit] >= 5);
-        if (fourMajor && hcp >= 8 && bid(2, "C")) return choose(bid(2, "C"), `SAYC 風格：同伴 1NT 後你有 ${hcp} HCP 與四張高花，用 2♣ Stayman 詢問高花配合。`);
-        if (fiveMajor === "H" && bid(2, "D")) return choose(bid(2, "D"), `SAYC 風格：同伴 1NT 後有五張紅心，用 2♦ Transfer 轉到紅心。`);
-        if (fiveMajor === "S" && bid(2, "H")) return choose(bid(2, "H"), `SAYC 風格：同伴 1NT 後有五張黑桃，用 2♥ Transfer 轉到黑桃。`);
-      }
       if (hcp >= 10 && bid(3, "NT")) return choose(bid(3, "NT"), `同伴已叫 NT，你有 ${hcp} HCP，合計大約有成局牌力，叫 3NT。`);
       if (hcp >= 8 && bid(2, "NT")) return choose(bid(2, "NT"), `同伴 NT 後你有 ${hcp} HCP，2NT 邀請成局。`);
       const major = majors[0];
@@ -2198,14 +2069,14 @@ function naturalCallDecision(game, seat, lobby = {}) {
     return pass(`${hcp} HCP，目前已由同伴掌握叫牌；沒有足夠牌力或配合，Pass。`);
   }
 
-  if (system !== "simplified" && hcp >= 16 && legal.some((c) => c.type === "double")) return choose({ type: "double" }, `${systemName}：${hcp} HCP，對手叫牌後以 Double 表示強牌或可防守。`);
+  if (hcp >= 16 && legal.some((c) => c.type === "double")) return choose({ type: "double" }, `${hcp} HCP，對手叫牌後以 Double 表示強牌或可防守。`);
   const overcallSuit = preferredOvercallSuit(hand, highSuit);
   if (overcallSuit && hcp >= 8) {
     const level = cheapestLevelForSuitOver(high, overcallSuit);
     if (level <= 3 && bid(level, overcallSuit)) return choose(bid(level, overcallSuit), `${hcp} HCP 且 ${SUITS[overcallSuit].symbol} 長門，選擇 ${level}${SUITS[overcallSuit].symbol} 競叫。`);
   }
   if (isBalanced(hand) && hcp >= 15 && hcp <= 18 && highLevel === 1 && bid(1, "NT")) return choose(bid(1, "NT"), `${hcp} HCP 均型，在一階競叫 1NT。`);
-  return pass(`${systemName}：${hcp} HCP，對手已有 ${callText(high)}；目前不宜冒險競叫，Pass。`);
+  return pass(`${hcp} HCP，對手已有 ${callText(high)}；目前不宜冒險競叫，Pass。`);
 }
 
 function preferredOpeningSuit(hand) {
@@ -2467,7 +2338,6 @@ function renderLobby(room) {
   $("difficultyLabel").textContent = $("difficulty").value;
   if ($("lobbyPacing")) $("lobbyPacing").value = sanitizePacingMs(room.lobby.settings.pacingMs || AI_ACTION_DELAY_MS);
   if ($("lobbyScoringMode")) $("lobbyScoringMode").value = room.lobby.settings.scoringMode || "single";
-  if ($("lobbyBiddingSystem")) $("lobbyBiddingSystem").value = normalizeBiddingSystem(room.lobby.settings.biddingSystem || "beginner");
   $("showAiThoughts").checked = Boolean(room.lobby.settings.showAiThoughts ?? true);
   if ($("allowSpectators")) $("allowSpectators").checked = room.lobby.settings.allowSpectators !== false;
   if ($("allowBotFill")) $("allowBotFill").checked = room.lobby.settings.allowBotFill !== false;
@@ -3045,7 +2915,7 @@ function gameHealthHtml(game, room) {
 function securityDesignHtml(game, room) {
   const mySeat = findSeatByUid(room, appState.uid, appState.clientId);
   const dummyPublic = Boolean(game?.mode === "standard" && game?.dummyVisible);
-  const secureRuleNote = appState.offline ? "離線局不需 Firebase 規則" : "請部署 v1.0.24 的 database.rules.json / secure example，強制私人手牌只能本人讀、動作只能本人提交、房主/仲裁者才能處理";
+  const secureRuleNote = appState.offline ? "離線局不需 Firebase 規則" : "請部署 v1.0.23 的 database.rules.json / secure example，強制私人手牌只能本人讀、動作只能本人提交、房主/仲裁者才能處理";
   return `
     <h3>防作弊資料拆分設計</h3>
     <ul class="security-list">
@@ -3191,8 +3061,8 @@ async function copyCurrentReview() {
   await copyText(currentReviewText(currentGame()));
   toast("已複製牌局檢討");
 }
-function downloadTextFile(filename, text, type = "text/plain;charset=utf-8") {
-  const blob = new Blob([text], { type });
+function downloadTextFile(filename, text) {
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -3522,7 +3392,7 @@ function attachSuggestionActions(container, mySeat) {
 function suggestCall(game, seat) {
   try {
     const decision = naturalCallDecision(structuredCloneCompat(game), seat, appState.room?.lobby || { settings: { difficulty: 12 } });
-    return { call: decision.call, reason: `${biddingSystemLabel(appState.room?.lobby?.settings?.biddingSystem || game.biddingSystem)}：${decision.reason}` };
+    return { call: decision.call, reason: `自然制第一版：${decision.reason}` };
   } catch (error) {
     console.warn("suggestCall failed", error);
     return null;
@@ -3604,7 +3474,7 @@ function renderAuctionControls(container, game, mySeat, options = {}) {
   }
   let legal = [];
   try {
-    legal = legalCallsForSettings(game, mySeat, appState.room?.lobby?.settings || {});
+    legal = legalCalls(game, mySeat);
   } catch (error) {
     console.error("legalCalls failed", error);
     wrap.append(actionNote("叫牌按鈕產生失敗，請重新整理頁面或請房主重新開局。"));
@@ -3805,69 +3675,25 @@ function saveGameResult(game) {
   const stats = loadStats();
   stats.games += 1;
   stats.modes[game.mode] = (stats.modes[game.mode] || 0) + 1;
-  const scoring = game.matchInfo?.mode || appState.room?.match?.mode || "single";
-  stats.scoringModes ||= {};
-  stats.scoringModes[scoring] = (stats.scoringModes[scoring] || 0) + 1;
   stats.nsScore += game.result?.scoreDelta?.NS || 0;
   stats.ewScore += game.result?.scoreDelta?.EW || 0;
   if (game.result?.made) stats.made += 1;
   else if (!game.result?.passedOut) stats.down += 1;
-  const declaringTeam = game.result?.declaringTeam || (game.declarer != null ? teamOf(game.declarer) : null);
-  if (declaringTeam) {
-    stats.declarerResults ||= { NS: { made: 0, down: 0 }, EW: { made: 0, down: 0 } };
-    if (game.result?.made) stats.declarerResults[declaringTeam].made += 1;
-    else if (!game.result?.passedOut) stats.declarerResults[declaringTeam].down += 1;
-  }
-  const contractKey = game.contract ? `${game.contract.level}${game.contract.suit}` : "PassedOut";
-  stats.contracts ||= {};
-  stats.contracts[contractKey] = (stats.contracts[contractKey] || 0) + 1;
-  if (game.contract?.level >= 6 && game.result?.made) stats.slamsMade = Number(stats.slamsMade || 0) + 1;
-  if (game.contract?.doubled) {
-    stats.doubles ||= { made: 0, down: 0 };
-    if (game.result?.made) stats.doubles.made += 1; else stats.doubles.down += 1;
-  }
-  const signedNS = Number(game.result?.scoreDelta?.NS || 0) - Number(game.result?.scoreDelta?.EW || 0);
-  stats.bestScore = Math.max(Number(stats.bestScore || 0), Math.abs(signedNS));
-  const entry = {
-    id: game.id,
-    at: Date.now(),
-    room: appState.roomCode || null,
-    boardNo: game.boardNo,
-    mode: game.mode,
-    scoring,
-    biddingSystem: game.biddingSystem || appState.room?.lobby?.settings?.biddingSystem || "beginner",
-    contract: game.contract ? contractText(game.contract, game.declarer) : "Passed out",
-    result: game.result?.summary || "",
-    ns: game.result?.scoreDelta?.NS || 0,
-    ew: game.result?.scoreDelta?.EW || 0
-  };
-  stats.history = [entry, ...(stats.history || [])].slice(0, 80);
   stats.last = { at: Date.now(), summary: game.result?.summary, mode: game.mode };
   localStorage.setItem(STORAGE.stats, JSON.stringify(stats));
-  recordDebugEvent("game-result", { boardNo: game.boardNo, contract: entry.contract, ns: entry.ns, ew: entry.ew });
   renderLocalStatsSummary();
 }
 function loadStats() {
-  try { return { games: 0, made: 0, down: 0, nsScore: 0, ewScore: 0, modes: {}, scoringModes: {}, contracts: {}, history: [], declarerResults: { NS: { made: 0, down: 0 }, EW: { made: 0, down: 0 } }, ...JSON.parse(localStorage.getItem(STORAGE.stats) || "{}") }; }
-  catch { return { games: 0, made: 0, down: 0, nsScore: 0, ewScore: 0, modes: {}, scoringModes: {}, contracts: {}, history: [], declarerResults: { NS: { made: 0, down: 0 }, EW: { made: 0, down: 0 } } }; }
+  try { return { games: 0, made: 0, down: 0, nsScore: 0, ewScore: 0, modes: {}, ...JSON.parse(localStorage.getItem(STORAGE.stats) || "{}") }; }
+  catch { return { games: 0, made: 0, down: 0, nsScore: 0, ewScore: 0, modes: {} }; }
 }
 function renderLocalStatsSummary() {
-  if (!$("localStatsSummary") || !$("achievementSummary")) return;
   const s = loadStats();
-  const topContract = Object.entries(s.contracts || {}).sort((a, b) => b[1] - a[1])[0];
-  const madeRate = s.games ? Math.round((Number(s.made || 0) / s.games) * 100) : 0;
-  const history = (s.history || []).slice(0, 6).map((h) => `<li><b>${escapeHtml(h.contract)}</b><span>${new Date(h.at).toLocaleString()}｜${escapeHtml(h.scoring || "single")}｜NS +${h.ns || 0} / EW +${h.ew || 0}</span></li>`).join("");
-  $("localStatsSummary").innerHTML = `
-    <div class="stat-grid">
-      <span>已完成 <b>${s.games}</b> 副</span><span>成約率 <b>${madeRate}%</b></span><span>倒約 ${s.down}</span><span>滿貫成功 ${s.slamsMade || 0}</span><span>NS 累計 ${s.nsScore}</span><span>EW 累計 ${s.ewScore}</span><span>最高單副分差 ${s.bestScore || 0}</span><span>最常合約 ${escapeHtml(topContract ? topContract[0] : "—")}</span>
-    </div>
-    <div class="history-list"><b>最近牌局</b><ul>${history || "<li>尚無牌局歷史。</li>"}</ul></div>`;
+  $("localStatsSummary").innerHTML = `已完成 <b>${s.games}</b> 副｜成約 ${s.made}｜倒約 ${s.down}｜NS 累計 ${s.nsScore}｜EW 累計 ${s.ewScore}`;
   $("achievementSummary").textContent = s.games >= 10 ? "成就：橋牌熟手，已完成 10 副以上。" : "成就：完成 10 副可解鎖橋牌熟手。";
 }
-async function shareLocalStats() { const s = loadStats(); await copyText(`我的合約橋牌戰績：完成 ${s.games} 副，成約 ${s.made}，倒約 ${s.down}，成約率 ${s.games ? Math.round(s.made / s.games * 100) : 0}%，NS ${s.nsScore} / EW ${s.ewScore}`); toast("已複製戰績"); }
+async function shareLocalStats() { const s = loadStats(); await copyText(`我的合約橋牌戰績：完成 ${s.games} 副，成約 ${s.made}，倒約 ${s.down}，NS ${s.nsScore} / EW ${s.ewScore}`); toast("已複製戰績"); }
 async function shareAchievements() { await copyText($("achievementSummary").textContent || "我正在玩合約橋牌網頁版！"); toast("已複製成就"); }
-function downloadGameHistory() { downloadTextFile(`bridge-history-${new Date().toISOString().slice(0,10)}.json`, JSON.stringify(loadStats().history || [], null, 2), "application/json"); toast("已下載牌局歷史"); }
-function clearGameHistory() { const s = loadStats(); s.history = []; localStorage.setItem(STORAGE.stats, JSON.stringify(s)); renderLocalStatsSummary(); toast("已清除牌局歷史"); }
 function collectLocalData() {
   return { build: BUILD, exportedAt: new Date().toISOString(), settings: Object.fromEntries(Object.values(STORAGE).map((key) => [key, localStorage.getItem(key)])) };
 }
@@ -3908,7 +3734,6 @@ function buildDetailedErrorReport() {
     processedActions: game?.processedActions || null,
     firebaseDiagnostic: firebaseDiagnosticSnapshot(),
     syncDiagnostics: collectSyncDiagnostics(appState.room),
-    debugEvents: loadDebugEvents().slice(-80),
     stuckDetection: detectStuckState(appState.room),
     match: appState.room?.match || null,
     health,
@@ -4103,7 +3928,6 @@ function openReplayDialog(game) {
   normalizeGame(game);
   appState.replay = { game: structuredCloneCompat(game), steps: buildReplaySteps(game), index: 0 };
   $("replaySummary").innerHTML = colorizeSuitsHtml(game.result?.summary || `${game.contract ? contractText(game.contract, game.declarer) : "尚未成立合約"}｜${modeLabel(game.mode)}`);
-  if ($("replaySpeed")) $("replaySpeed").value = String(localStorage.getItem(STORAGE.replaySpeed) || "900");
   renderReplayControls();
   renderReplayStep();
   $("replayDialog").showModal();
@@ -4131,7 +3955,7 @@ function buildReplaySteps(game) {
     });
     const title = `第 ${item.trickNo} 墩｜第 ${item.playIndex + 1} 張：${seatName(item.play.seat)} 出 ${item.play.card.label}`;
     const subtitle = item.winner != null && item.playIndex === 3 ? `${seatName(item.winner)} 贏得本墩（${item.team}）` : `本墩進行中 ${item.playIndex + 1}/4`;
-    steps.push({ index: idx + 1, title, subtitle, plays: [...seen], currentTrick, winner: item.winner, team: item.team, trickNo: item.trickNo, playIndex: item.playIndex });
+    steps.push({ index: idx + 1, title, subtitle, plays: [...seen], currentTrick, winner: item.winner, team: item.team, trickNo: item.trickNo });
   });
   return steps;
 }
@@ -4151,24 +3975,10 @@ function setReplayStep(index) {
   const replay = appState.replay;
   if (!replay?.steps?.length) return;
   replay.index = Math.max(0, Math.min(replay.steps.length - 1, Number(index) || 0));
-  if ($("replaySpeed")) $("replaySpeed").value = String(localStorage.getItem(STORAGE.replaySpeed) || "900");
   renderReplayControls();
   renderReplayStep();
 }
 function moveReplayStep(delta) { setReplayStep((appState.replay?.index || 0) + Number(delta || 0)); }
-function moveReplayTrick(delta) {
-  const replay = appState.replay;
-  if (!replay?.steps?.length) return;
-  const current = replay.steps[replay.index || 0];
-  const currentTrick = Number(current?.trickNo || 0);
-  const direction = Number(delta || 0) >= 0 ? 1 : -1;
-  const candidates = replay.steps
-    .map((step, index) => ({ step, index }))
-    .filter((item) => item.step.trickNo != null && (direction > 0 ? Number(item.step.trickNo) > currentTrick : Number(item.step.trickNo) < currentTrick));
-  if (!candidates.length) return;
-  const target = direction > 0 ? candidates[0] : candidates[candidates.length - 1];
-  setReplayStep(target.index);
-}
 function autoPlayReplay() {
   const replay = appState.replay;
   if (!replay?.steps?.length) return;
@@ -4187,29 +3997,7 @@ function autoPlayReplay() {
       return;
     }
     moveReplayStep(1);
-  }, replaySpeedMs());
-}
-function buildReplayStateAtStep(game, step, remainingBySeat) {
-  const state = structuredCloneCompat(game);
-  normalizeGame(state);
-  state.hands = remainingBySeat.map((hand) => hand.map((card) => ({ ...card })));
-  state.currentTrick = listFromFirebase(step.currentTrick || []).map((play) => ({ ...play, card: { ...play.card } }));
-  state.pendingTrick = null;
-  state.trickHistory = [];
-  if (!step.plays?.length) {
-    state.phase = state.contract ? "openingLead" : "auction";
-    state.currentPlayer = state.openingLeader ?? state.dealer;
-    return state;
-  }
-  if (state.currentTrick.length >= 4) {
-    state.phase = "trickPause";
-    state.currentPlayer = currentWinningPlay(state.currentTrick, state.contract?.suit)?.seat ?? step.winner ?? null;
-    return state;
-  }
-  state.phase = state.currentTrick.length ? "play" : "openingLead";
-  const last = state.currentTrick[state.currentTrick.length - 1];
-  state.currentPlayer = last ? nextSeat(last.seat) : (state.openingLeader ?? state.dealer);
-  return state;
+  }, 900);
 }
 function renderReplayStep() {
   const replay = appState.replay;
@@ -4219,10 +4007,6 @@ function renderReplayStep() {
   const playedIds = new Set(step.plays.map((p) => p.card?.id).filter(Boolean));
   const remainingBySeat = [0, 1, 2, 3].map((seat) => originalHand(game, seat).filter((card) => !playedIds.has(card.id)));
   const currentWinner = currentWinningPlay(step.currentTrick || [], game.contract?.suit);
-  const replayState = buildReplayStateAtStep(game, step, remainingBySeat);
-  const nextActor = replayState.currentPlayer;
-  const legalAtStep = nextActor != null && ["openingLead", "play"].includes(replayState.phase) ? legalCardsForSeat(replayState, nextActor) : [];
-  const coachAtStep = legalAtStep.length ? suggestPlay(replayState, nextActor) : null;
   const table = [0, 1, 2, 3].map((seat) => {
     const play = (step.currentTrick || []).find((p) => Number(p.seat) === seat);
     const win = play && currentWinner && currentWinner.seat === play.seat && currentWinner.card?.id === play.card?.id;
@@ -4233,12 +4017,6 @@ function renderReplayStep() {
     <h3>${escapeHtml(step.title)}</h3>
     <p class="hint compact">${colorizeSuitsHtml(step.subtitle)}${currentWinner ? `｜目前最大：${seatName(currentWinner.seat)} ${cardTextHtml(currentWinner.card)}` : ""}</p>
     <div class="replay-step-grid">${table}</div>
-    <div class="replay-coach-card">
-      <b>當時合法牌 / 教練建議</b>
-      <p class="hint compact">${nextActor != null ? `${seatName(nextActor)} 下一手｜合法牌 ${legalAtStep.length} 張` : "本副已無下一手"}</p>
-      <div class="replay-legal-cards">${legalAtStep.map((card) => cardHtml(card, { compact: true })).join("") || "<span class='hint compact'>沒有合法牌可顯示。</span>"}</div>
-      ${coachAtStep?.card ? `<p class="hint compact">建議：${cardTextHtml(coachAtStep.card)}｜${colorizeSuitsHtml(coachAtStep.reason)}</p>` : ""}
-    </div>
     <h3>當時剩餘手牌</h3>
     <div class="replay-hand-grid">${hands}</div>
   `;
@@ -4289,7 +4067,7 @@ async function clearPwaCachesAndReload() {
   setTimeout(() => location.reload(), 800);
 }
 function registerServiceWorker() {
-  if (!("serviceWorker" in navigator) || !navigator.serviceWorker || typeof navigator.serviceWorker.addEventListener !== "function" || typeof navigator.serviceWorker.register !== "function") return;
+  if (!("serviceWorker" in navigator)) return;
   let refreshing = false;
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (refreshing) return;
@@ -4312,9 +4090,5 @@ function registerServiceWorker() {
 function showUpdateBanner(worker) { appState.updateWorker = worker; $("updateBanner").classList.remove("hidden"); }
 function reloadForUpdate() { if (appState.updateWorker) appState.updateWorker.postMessage({ type: "SKIP_WAITING" }); else location.reload(); }
 
-try { registerServiceWorker(); } catch (error) { console.warn("Service worker boot skipped", error); }
-try { init(); } catch (error) {
-  console.error("App boot failed", error);
-  const footer = document.getElementById("versionFooter");
-  if (footer) footer.textContent = `合約橋牌 ${BUILD}｜啟動失敗，請清除快取後重新整理`;
-}
+registerServiceWorker();
+init();
