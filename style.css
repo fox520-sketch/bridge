@@ -580,3 +580,40 @@ button .suit-symbol.black,
   .review-summary, .health-summary, .health-list li { align-items: stretch; flex-direction: column; }
   .health-list b { text-align: left; }
 }
+
+/* v1.0.17 mobile safety + table readability */
+.tag.danger { background: #fee2e2; color: #991b1b; }
+.hand-header-tools { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+.hand-sort-field { min-width: 126px; }
+.hand-sort-field select { padding: 7px 9px; border-radius: 12px; }
+.play-confirm-bar {
+  display: grid; gap: 8px; align-items: start;
+  border: 1px solid color-mix(in srgb, #facc15, var(--line) 45%);
+  background: color-mix(in srgb, #fef9c3, var(--panel-strong) 45%);
+  border-radius: 16px; padding: 10px; margin-bottom: 10px;
+}
+.play-confirm-bar b { color: var(--ink); }
+.play-confirm-bar span { color: var(--muted); line-height: 1.45; }
+.confirm-play-mode .card-face.playable { outline-style: dashed; }
+.mobile-quick-nav { display: none; }
+@media (max-width: 760px) {
+  #app { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
+  .mobile-quick-nav {
+    position: sticky; top: 8px; z-index: 30;
+    display: flex; gap: 7px; align-items: center;
+    margin: 0 0 10px; padding: 8px;
+    border: 1px solid var(--line); border-radius: 18px;
+    background: color-mix(in srgb, var(--panel-strong), transparent 4%);
+    box-shadow: var(--shadow); overflow-x: auto;
+  }
+  .mobile-quick-nav.hidden { display: none !important; }
+  .mobile-quick-status { flex: 1 0 150px; font-size: .86rem; font-weight: 900; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mobile-quick-nav button {
+    border: 1px solid var(--line); border-radius: 999px; padding: 8px 10px;
+    background: var(--panel-strong); color: var(--ink); font-weight: 900; white-space: nowrap;
+  }
+  .hand-header { align-items: flex-start; }
+  .hand-header-tools { width: 100%; justify-content: space-between; }
+  .hand-sort-field { flex: 1; }
+  .play-confirm-bar { position: sticky; bottom: calc(8px + env(safe-area-inset-bottom)); z-index: 22; }
+}

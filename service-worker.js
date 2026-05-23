@@ -1,4 +1,4 @@
-const CACHE_NAME = "contract-bridge-v1-0-16-review-health-export";
+const CACHE_NAME = "contract-bridge-v1-0-17-mobile-safety-seat-tools";
 const ASSETS = [
   "./",
   "./index.html",

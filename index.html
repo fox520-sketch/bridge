@@ -110,6 +110,7 @@
         </div>
         <div class="experience-controls">
           <label class="check compact-check"><input id="touchComfortToggle" type="checkbox" /> 手機大牌模式</label>
+          <label class="check compact-check"><input id="confirmPlayToggle" type="checkbox" /> 出牌前確認</label>
           <label class="mini-field sound-profile-field">
             <span>音效風格</span>
             <select id="soundProfile">
@@ -335,6 +336,7 @@
         </div>
         <button id="btnTurnAlertFocus" class="primary" type="button">前往操作</button>
       </div>
+      <nav id="mobileQuickNav" class="mobile-quick-nav hidden" aria-label="手機快速跳轉"></nav>
       <aside class="left-panel panel">
         <button id="btnGameExit" class="ghost game-exit" type="button">返回主畫面</button>
         <div class="phase-card">
@@ -371,6 +373,7 @@
           </div>
           <div class="button-row">
             <button id="btnTakeOverCurrentGame" class="ghost" type="button">接管目前輪到者</button>
+            <button id="btnForceContinueGame" class="ghost" type="button">立即處理等待</button>
             <button id="btnTakeOverOfflineGame" class="ghost" type="button">接管全部離線玩家</button>
             <button id="btnCopyLinkGame" class="ghost" type="button">複製邀請連結</button>
             <button id="btnCloseRoomGame" class="ghost danger-ghost" type="button">關閉房間</button>
@@ -402,7 +405,17 @@
               <h3 id="handTitle">你的手牌</h3>
               <p id="handHint">依目前階段操作。</p>
             </div>
-            <div id="handCount" class="pill"></div>
+            <div class="hand-header-tools">
+              <label class="mini-field hand-sort-field">
+                <span>排序</span>
+                <select id="handSortMode" aria-label="手牌排序">
+                  <option value="suit">花色排序</option>
+                  <option value="rank">牌點排序</option>
+                  <option value="redblack">紅黑交錯</option>
+                </select>
+              </label>
+              <div id="handCount" class="pill"></div>
+            </div>
           </div>
           <div id="handAnalysis" class="hand-analysis" aria-live="polite"></div>
           <div id="handSuggestion" class="hand-suggestion hidden" aria-live="polite"></div>
@@ -478,6 +491,10 @@
         <p class="eyebrow">Release</p>
         <h2>本版更新</h2>
         <ul>
+          <li>新增手機快速跳轉列，可一鍵跳到牌桌、操作、手牌與紀錄。</li>
+          <li>新增「出牌前確認」與手牌排序切換，降低手機誤觸並改善牌感。</li>
+          <li>牌桌座位新增發牌、有身價、首攻與本方墩數標示。</li>
+          <li>房主新增「立即處理等待」，可直接收牌或立刻執行 AI 動作。</li>
           <li>新增「牌局檢討」與「牌局健康檢查」，可在牌局中即時查看合約方是否達標、牌張同步是否正常，並可下載 TXT 牌譜。</li>
           <li>新增「等待狀態」卡：顯示目前輪到誰、真人 / AI / 離線狀態，以及 AI 思考或清桌倒數。</li>
           <li>房主新增「接管目前輪到者」，只接管正在卡住的離線真人座位。</li>

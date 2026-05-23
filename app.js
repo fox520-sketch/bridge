@@ -1,5 +1,5 @@
-const BUILD = "bridge-v1.0.16-review-health-export";
-const ROOM_SCHEMA_VERSION = 58;
+const BUILD = "bridge-v1.0.17-mobile-safety-seat-tools";
+const ROOM_SCHEMA_VERSION = 59;
 const SEATS = [
   { id: 0, key: "N", name: "北", team: "NS" },
   { id: 1, key: "E", name: "東", team: "EW" },
@@ -28,6 +28,8 @@ const STORAGE = {
   sound: "bridge.sound",
   vibration: "bridge.vibration",
   touch: "bridge.touch",
+  confirmPlay: "bridge.confirmPlay",
+  handSortMode: "bridge.handSortMode",
   soundProfile: "bridge.soundProfile",
   logVisible: "bridge.logVisible",
   stats: "bridge.stats",
@@ -71,7 +73,8 @@ const appState = {
   processingActions: false,
   lastTurnNoticeKey: null,
   updateWorker: null,
-  uiTicker: null
+  uiTicker: null,
+  pendingPlay: null
 };
 
 function init() {
@@ -86,9 +89,13 @@ function init() {
   setCheckbox("soundToggle", getBool(STORAGE.sound, false));
   setCheckbox("vibrationToggle", getBool(STORAGE.vibration, false));
   setCheckbox("touchComfortToggle", getBool(STORAGE.touch, false));
+  setCheckbox("confirmPlayToggle", getBool(STORAGE.confirmPlay, false));
+  const handSortSelect = $("handSortMode");
+  if (handSortSelect) handSortSelect.value = loadSetting(STORAGE.handSortMode, "suit");
   $("soundProfile").value = loadSetting(STORAGE.soundProfile, "soft");
   applyPlayerHintsVisible(getBool(STORAGE.hints, true));
   applyTouchComfort();
+  applyPlayConfirmMode();
   applyLogVisibility(getBool(STORAGE.logVisible, false));
 
   const roomFromUrl = getInviteRoomFromLocation();
@@ -144,6 +151,7 @@ function bindEvents() {
   $("btnTakeOverOfflineLobby").addEventListener("click", hostTakeOverOfflinePlayers);
   $("btnTakeOverOfflineGame").addEventListener("click", hostTakeOverOfflinePlayers);
   $("btnTakeOverCurrentGame")?.addEventListener("click", hostTakeOverCurrentOfflinePlayer);
+  $("btnForceContinueGame")?.addEventListener("click", hostForceContinueGame);
   $("btnExtendRoomLobby").addEventListener("click", hostExtendRoom);
   $("btnCopyRoomMaintenanceLobby").addEventListener("click", copyRoomMaintenanceSummary);
   $("btnCloseRoomLobby").addEventListener("click", hostCloseRoom);
@@ -241,6 +249,7 @@ function setSoundEnabled(v) { localStorage.setItem(STORAGE.sound, String(v)); se
 function setVibrationEnabled(v) { localStorage.setItem(STORAGE.vibration, String(v)); setCheckbox("vibrationToggle", v); if (v) vibrate(18); }
 function setTouchComfortEnabled(v) { localStorage.setItem(STORAGE.touch, String(v)); setCheckbox("touchComfortToggle", v); applyTouchComfort(); }
 function applyTouchComfort() { document.body.classList.toggle("touch-comfort", getBool(STORAGE.touch, false)); }
+function applyPlayConfirmMode() { document.body.classList.toggle("confirm-play-mode", getBool(STORAGE.confirmPlay, false)); }
 function setLogVisible(v) { localStorage.setItem(STORAGE.logVisible, String(v)); applyLogVisibility(v); }
 function applyLogVisibility(v) {
   document.body.classList.toggle("log-visible", v);
@@ -345,6 +354,7 @@ function renderTemporalHud() {
     renderTurnWaitCard(room);
     renderGameRoomStatus(room);
     renderTable(room);
+    renderMobileQuickNav(room);
   } catch (error) {
     console.warn("temporal HUD refresh failed", error);
   }
@@ -745,6 +755,38 @@ async function hostTakeOverCurrentOfflinePlayer() {
   });
   toast(`已讓電腦接管 ${seatName(seat)}`);
 }
+
+async function hostForceContinueGame() {
+  if (!(appState.offline || isHost())) return toast("只有房主可以處理等待");
+  const room = appState.room;
+  const game = currentGame();
+  if (!room || !game || room.meta?.status !== "game") return toast("目前沒有進行中的牌局");
+  const current = structuredCloneCompat(game);
+  if (current.phase === "trickPause" && current.pendingTrick) {
+    if (!finishPendingTrick(current, true)) return toast("目前無法收牌");
+    await updateRoom({ game: current, "meta/status": "game", "meta/updatedAt": Date.now() });
+    toast("已立即收牌並繼續");
+    return;
+  }
+  if (["auction", "openingLead", "play"].includes(current.phase)) {
+    const controller = controllingSeatForCurrentAction(current);
+    const player = room.lobby?.seats?.[controller];
+    if (player?.type === "bot") {
+      const action = chooseBotAction(current, controller, room.lobby);
+      if (!action) return toast("AI 暫時沒有可執行動作");
+      appendAiThought(current, controller, action, room.lobby);
+      const result = applyAction(current, { ...action, uid: player.uid, actorSeat: controller, createdAt: Date.now() }, room.lobby);
+      if (!result.ok) return toast(result.message || "AI 動作失敗");
+      await updateRoom({ game: current, "meta/status": "game", "meta/updatedAt": Date.now() });
+      toast("已立即執行 AI 動作");
+      return;
+    }
+  }
+  maybeResolveTrickPause();
+  maybeScheduleBot();
+  toast("目前沒有可強制處理的 AI 或清桌等待");
+}
+
 async function hostExtendRoom() {
   if (!isHost()) return;
   await updateRoom({ "meta/expiresAt": Date.now() + 24 * 60 * 60 * 1000, "meta/updatedAt": Date.now() });
@@ -854,9 +896,11 @@ async function submitAction(action) {
     const next = structuredCloneCompat(game);
     const result = applyAction(next, fullAction, appState.room.lobby);
     if (!result.ok) return toast(result.message || "不能這樣操作");
+    appState.pendingPlay = null;
     await updateRoom({ game: next, "meta/status": "game", "meta/updatedAt": Date.now() });
     return;
   }
+  appState.pendingPlay = null;
   await appState.firebase.push(appState.firebase.ref(appState.firebase.db, actionsPath()), fullAction);
 }
 function maybeProcessActions() {
@@ -1350,6 +1394,7 @@ function renderGame(room) {
   renderDealProgress(game, room);
   renderTurnWaitCard(room);
   renderTurnAlert(room);
+  renderMobileQuickNav(room);
   renderLog(game);
   updateBrowserTitle(game, room);
   renderTips(game, room);
@@ -1578,6 +1623,33 @@ function scrollToCurrentAction() {
   if (!game) return;
   const target = game.phase === "auction" ? ($("handActionPanel") || $("actionPanel")) : ($("hand") || $("actionPanel"));
   target?.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+
+function renderMobileQuickNav(room) {
+  const nav = $("mobileQuickNav");
+  if (!nav) return;
+  const game = room?.game;
+  const active = Boolean(game && room?.meta?.status === "game");
+  nav.classList.toggle("hidden", !active);
+  if (!active) return;
+  const mySeat = findSeatByUid(room, appState.uid, appState.clientId);
+  const control = controllableSeatForViewer(game, mySeat);
+  const status = control?.canAct
+    ? (game.phase === "auction" ? "輪到你叫牌" : "輪到你出牌")
+    : phaseTurnText(game, room);
+  nav.innerHTML = `
+    <span class="mobile-quick-status">${colorizeSuitsHtml(status)}</span>
+    <button type="button" data-scroll-target="table">牌桌</button>
+    <button type="button" data-scroll-target="actionPanel">操作</button>
+    <button type="button" data-scroll-target="handPanel">手牌</button>
+    <button type="button" data-scroll-target="auctionRecord">紀錄</button>
+  `;
+  nav.querySelectorAll("[data-scroll-target]").forEach((btn) => btn.addEventListener("click", () => {
+    const id = btn.dataset.scrollTarget;
+    const target = id === "handPanel" ? document.querySelector(".hand-panel") : $(id);
+    target?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }));
 }
 
 function renderRecords(game) {
@@ -1817,13 +1889,16 @@ function renderTable(room) {
     if (seat === mySeat) tags.push(`<span class="tag ok">你</span>`);
     const presenceTag = presenceTagHtml(player);
     if (presenceTag) tags.push(presenceTag);
+    if (seat === game.dealer) tags.push(`<span class="tag warn">發牌</span>`);
+    if (isVulnerable(game.vulnerability, teamOf(seat))) tags.push(`<span class="tag danger">有身價</span>`);
     if (game.declarer === seat) tags.push(`<span class="tag">莊家</span>`);
+    if (game.openingLeader === seat && ["openingLead", "play", "trickPause"].includes(game.phase)) tags.push(`<span class="tag">首攻</span>`);
     if (game.mode === "standard" && game.dummy === seat) tags.push(`<span class="tag">夢家</span>`);
     const visible = isSeatHandVisible(game, seat, mySeat);
     const mini = visible ? `<div class="seat-mini-hand">${(game.hands[seat] || []).slice(0, 13).map((c) => miniCardHtml(c)).join("")}</div>` : `<div class="seat-mini-hand">${Array.from({ length: Math.min(13, game.hands[seat]?.length || 0) }, () => `<span class="mini-card">🂠</span>`).join("")}</div>`;
     el.innerHTML = `
       <div class="seat-head"><span class="seat-name">${seatName(seat)}</span><span>${SEATS[seat].key}</span></div>
-      <div class="seat-meta">${escapeHtml(player?.name || "空位")}｜${teamOf(seat)}｜手牌 ${game.hands[seat]?.length || 0}</div>
+      <div class="seat-meta">${escapeHtml(player?.name || "空位")}｜${teamOf(seat)}｜${isVulnerable(game.vulnerability, teamOf(seat)) ? "有身價" : "無身價"}｜手牌 ${game.hands[seat]?.length || 0}｜本方 ${game.tricksWon?.[teamOf(seat)] || 0} 墩</div>
       <div class="seat-tags">${tags.join("")}</div>${mini}
     `;
     const liveWinningPlay = currentWinningPlay(game.currentTrick || [], game.contract?.suit);
@@ -1850,6 +1925,7 @@ function renderHand(room) {
   const seat = control?.seat ?? mySeat;
   const canAct = control?.canAct ?? false;
   const hand = seat == null ? [] : (game.hands[seat] || []);
+  const displayHand = sortHandForDisplay(hand);
   $("handTitle").textContent = seat == null ? "觀戰中" : (seat === mySeat ? "你的手牌" : `你正在指揮 ${seatName(seat)} 的夢家牌`);
   $("handHint").innerHTML = colorizeSuitsHtml(handHintText(game, seat, canAct));
   $("handCount").textContent = seat == null ? "觀戰" : `${hand.length} 張`;
@@ -1861,23 +1937,74 @@ function renderHand(room) {
     attachSuggestionActions(suggestionEl, mySeat);
   }
 
+  const legalIds = canAct && ["openingLead", "play"].includes(game.phase) ? new Set(legalCardsForSeat(game, seat).map((c) => c.id)) : new Set();
+  const confirmPlay = getBool(STORAGE.confirmPlay, false);
+  if (!canAct || !["openingLead", "play"].includes(game.phase) || !appState.pendingPlay || appState.pendingPlay.seat !== seat || !legalIds.has(appState.pendingPlay.cardId)) {
+    if (appState.pendingPlay && (!canAct || appState.pendingPlay.seat !== seat || !legalIds.has(appState.pendingPlay.cardId))) appState.pendingPlay = null;
+  }
   const inlinePanel = $("handActionPanel");
   if (inlinePanel) {
     inlinePanel.innerHTML = "";
-    inlinePanel.classList.toggle("hidden", game.phase !== "auction");
+    const showConfirm = confirmPlay && canAct && ["openingLead", "play"].includes(game.phase);
+    inlinePanel.classList.toggle("hidden", !(game.phase === "auction" || showConfirm));
     if (game.phase === "auction") renderAuctionControls(inlinePanel, game, mySeat, { compact: true, showTitle: true });
+    else if (showConfirm) renderPlayConfirmControls(inlinePanel, game, seat);
   }
 
-  const legalIds = canAct && ["openingLead", "play"].includes(game.phase) ? new Set(legalCardsForSeat(game, seat).map((c) => c.id)) : new Set();
-  $("hand").innerHTML = hand.map((card) => {
+  $("hand").innerHTML = displayHand.map((card) => {
     const playable = legalIds.has(card.id);
     const disabled = canAct && ["openingLead", "play"].includes(game.phase) && !playable;
-    return cardHtml(card, { playable, disabled, cardId: card.id, seat });
+    const selected = Boolean(appState.pendingPlay && appState.pendingPlay.seat === seat && appState.pendingPlay.cardId === card.id);
+    return cardHtml(card, { playable, disabled, selected, cardId: card.id, seat });
   }).join("");
   document.querySelectorAll(".card-face.playable[data-card-id]").forEach((el) => {
-    el.addEventListener("click", () => submitAction({ type: "play", seat: Number(el.dataset.seat), cardId: el.dataset.cardId }));
+    el.addEventListener("click", () => {
+      const cardId = el.dataset.cardId;
+      const playSeat = Number(el.dataset.seat);
+      if (getBool(STORAGE.confirmPlay, false)) {
+        appState.pendingPlay = { seat: playSeat, cardId };
+        renderHand(appState.room);
+      } else {
+        submitAction({ type: "play", seat: playSeat, cardId });
+      }
+    });
   });
 }
+
+function sortHandForDisplay(hand) {
+  const mode = loadSetting(STORAGE.handSortMode, "suit");
+  const cards = [...(hand || [])];
+  if (mode === "rank") {
+    const suitWeight = { S: 0, H: 1, D: 2, C: 3 };
+    return cards.sort((a, b) => b.order - a.order || suitWeight[a.suit] - suitWeight[b.suit]);
+  }
+  if (mode === "redblack") {
+    const suitWeight = { S: 0, H: 1, C: 2, D: 3 };
+    return cards.sort((a, b) => suitWeight[a.suit] - suitWeight[b.suit] || b.order - a.order);
+  }
+  return sortHand(cards);
+}
+
+function renderPlayConfirmControls(container, game, seat) {
+  const selected = appState.pendingPlay;
+  const card = selected ? (game.hands?.[seat] || []).find((c) => c.id === selected.cardId) : null;
+  const bar = document.createElement("div");
+  bar.className = "play-confirm-bar";
+  if (!card) {
+    bar.innerHTML = `<b>出牌確認已開啟</b><span>先點選一張高亮的合法牌，再按確認出牌。</span>`;
+  } else {
+    bar.innerHTML = `<b>已選 ${cardTextHtml(card)}</b><span>確認後才會送出，避免手機誤觸。</span>`;
+    const row = document.createElement("div");
+    row.className = "button-row";
+    row.append(
+      button("確認出牌", "primary", () => submitAction({ type: "play", seat, cardId: card.id })),
+      button("取消選牌", "ghost", () => { appState.pendingPlay = null; renderHand(appState.room); })
+    );
+    bar.appendChild(row);
+  }
+  container.appendChild(bar);
+}
+
 function controllableSeatForViewer(game, mySeat) {
   if (mySeat == null || appState.spectator) return { seat: null, canAct: false };
   if (game.phase === "auction") return { seat: mySeat, canAct: game.currentPlayer === mySeat };
@@ -2122,7 +2249,7 @@ function maybeShowResult(game) {
   playSfx(game.result.made ? "success" : "fail");
 }
 function cardHtml(card, opts = {}) {
-  const cls = ["card-face", cardColor(card), opts.small ? "small" : "", opts.playable ? "playable" : "", opts.disabled ? "disabled" : "", opts.winning ? "winning-card" : ""].filter(Boolean).join(" ");
+  const cls = ["card-face", cardColor(card), opts.small ? "small" : "", opts.playable ? "playable" : "", opts.disabled ? "disabled" : "", opts.selected ? "selected" : "", opts.winning ? "winning-card" : ""].filter(Boolean).join(" ");
   const data = opts.cardId ? ` data-card-id="${escapeHtml(opts.cardId)}" data-seat="${Number(opts.seat)}"` : "";
   const title = opts.winning ? `${card.label}｜目前最大` : card.label;
   return `<div class="${cls}"${data} title="${escapeHtml(title)}"><span class="rank">${escapeHtml(card.rank)}</span><span class="suit ${cardColor(card)}">${SUITS[card.suit].symbol}</span></div>`;
