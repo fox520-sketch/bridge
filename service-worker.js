@@ -1,10 +1,10 @@
-const CACHE_NAME = "contract-bridge-v1-0-24-8-ai-bidding-guardrails";
+const CACHE_NAME = "contract-bridge-v1-0-24-9-home-simplified";
 const ASSETS = [
   "./",
-  "./index.html?v=1.0.24.8",
-  "./style.css?v=1.0.24.8",
-  "./app.js?v=1.0.24.8",
-  "./manifest.webmanifest?v=1.0.24.8",
+  "./index.html?v=1.0.24.9",
+  "./style.css?v=1.0.24.9",
+  "./app.js?v=1.0.24.9",
+  "./manifest.webmanifest?v=1.0.24.9",
   "./icons/icon-192.png",
   "./icons/icon-512.png"
 ];
@@ -34,7 +34,7 @@ self.addEventListener("fetch", (event) => {
         }
         return response;
       })
-      .catch(() => caches.match(request).then((cached) => cached || caches.match("./index.html?v=1.0.24.8") || caches.match("./index.html")))
+      .catch(() => caches.match(request).then((cached) => cached || caches.match("./index.html?v=1.0.24.9") || caches.match("./index.html")))
   );
 });
 

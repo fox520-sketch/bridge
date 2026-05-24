@@ -1,4 +1,4 @@
-const BUILD = "bridge-v1.0.24.8-ai-bidding-guardrails";
+const BUILD = "bridge-v1.0.24.9-home-simplified";
 const ROOM_SCHEMA_VERSION = 66;
 const SEATS = [
   { id: 0, key: "N", name: "北", team: "NS" },
@@ -4271,7 +4271,7 @@ function registerServiceWorker() {
     location.reload();
   });
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js?v=1.0.24.8", { updateViaCache: "none" }).then((registration) => {
+    navigator.serviceWorker.register("./service-worker.js?v=1.0.24.9", { updateViaCache: "none" }).then((registration) => {
       registration.update().catch(() => {});
       if (registration.waiting && navigator.serviceWorker.controller) {
         registration.waiting.postMessage({ type: "SKIP_WAITING" });

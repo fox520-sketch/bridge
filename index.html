@@ -11,9 +11,9 @@
   <meta name="theme-color" content="#087ea4" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="合約橋牌" />
-  <link rel="manifest" href="manifest.webmanifest?v=1.0.24.8" />
+  <link rel="manifest" href="manifest.webmanifest?v=1.0.24.9" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="style.css?v=1.0.24.8" />
+  <link rel="stylesheet" href="style.css?v=1.0.24.9" />
 </head>
 <body>
   <div id="app">
@@ -29,243 +29,252 @@
         <h1>合約橋牌</h1>
         <p class="subtitle">標準模式：夢家亮牌・變體模式：四手暗牌各自出牌・Firebase 4 人開房間</p>
       </div>
-      <div class="top-actions">
-        <label class="theme-picker" for="themeSelect">
-          <span>主題</span>
-          <select id="themeSelect" aria-label="選擇主題風格">
-            <option value="auto">自動（跟隨系統）</option>
-            <option value="ocean">海洋風</option>
-            <option value="eye-care">護眼風</option>
-            <option value="e-ink">電子紙風</option>
-            <option value="forest">森林風</option>
-            <option value="grassland">草原風</option>
-            <option value="sakura">櫻花風</option>
-            <option value="twilight">暮光風</option>
-          </select>
-        </label>
-        <label class="top-check" for="hintToggle"><input id="hintToggle" type="checkbox" /> 玩家提示</label>
-        <label class="top-check" for="soundToggle"><input id="soundToggle" type="checkbox" /> 音效</label>
-        <label class="top-check" for="vibrationToggle"><input id="vibrationToggle" type="checkbox" /> 震動</label>
-        <button id="btnOnboarding" class="ghost" type="button">新手導覽</button>
-        <button id="btnRules" class="ghost" type="button">玩法摘要</button>
+      <div class="top-actions top-actions-simple">
         <button id="btnLeave" class="ghost hidden" type="button">離開房間</button>
       </div>
     </header>
 
-    <section id="connectView" class="card shell-card">
-      <div class="hero">
+    <section id="connectView" class="card shell-card home-shell">
+      <div class="hero home-hero">
         <div>
-          <span class="pill">GitHub Pages Ready</span>
-          <h2>開始遊戲</h2>
-          <p>可直接單人離線練習，也可以連線 Firebase 建立房間，讓 4 位真人坐北、東、南、西一起玩。不足的人數可由電腦補位。</p>
+          <span class="pill">快速入口</span>
+          <h2>選擇遊戲方式</h2>
+          <p>首頁簡化為四個區塊：單人遊戲、多人遊戲、說明、其他設定。預設使用「變體模式：四手暗牌」。</p>
         </div>
         <div class="wave"><span class="suit-symbol black">♠</span> <span class="suit-symbol red">♥</span> <span class="suit-symbol red">♦</span> <span class="suit-symbol black">♣</span></div>
       </div>
 
-      <div class="public-start-card" aria-label="快速開始">
-        <div class="public-start-head">
-          <div>
-            <p class="eyebrow">Quick Start</p>
-            <h3>快速開始</h3>
-            <p class="hint compact">不知道怎麼選？目前預設使用「閉手四人變體」；想玩正式合約橋牌流程，可改選標準夢家模式。</p>
+      <div class="home-grid">
+        <section class="home-card home-card-primary" aria-labelledby="homeSingleTitle">
+          <div class="home-card-head">
+            <span class="home-card-icon">🎮</span>
+            <div>
+              <p class="eyebrow">Single Player</p>
+              <h3 id="homeSingleTitle">單人遊戲</h3>
+              <p class="hint compact">不用登入，直接以南家玩家＋3 位電腦開始。預設閉手四人變體。</p>
+            </div>
           </div>
-          <button id="btnOpenReleaseNotes" class="ghost" type="button">本版更新</button>
-          <button id="btnOpenReleaseChecklist" class="ghost" type="button">正式版測試</button>
-          <button id="btnOpenTutorial" class="ghost" type="button">玩法教學</button>
-          <button id="btnOpenPublicStatusTop" class="ghost" type="button">公開狀態</button>
-        </div>
-        <div class="quick-mode-grid">
-          <button id="btnQuickBeginner" class="quick-mode" type="button">
-            <b>新手直接玩</b>
-            <span>開啟玩家提示，變體模式：四手暗牌，立即離線開局。</span>
-          </button>
-          <button id="btnQuickStandard" class="quick-mode" type="button">
-            <b>標準單人局</b>
-            <span>合約橋牌標準流程：首攻後夢家亮牌，莊家指揮夢家。</span>
-          </button>
-          <button id="btnQuickClosed" class="quick-mode" type="button">
-            <b>閉手四人變體</b>
-            <span>取消夢家亮牌；四人都只看自己的牌並自行出牌。</span>
-          </button>
-          <button id="btnQuickMultiplayer" class="quick-mode" type="button">
-            <b>邀請朋友</b>
-            <span>連線 Firebase 後建立房間、複製連結或 QR Code。</span>
-          </button>
-        </div>
-      </div>
 
-      <div class="public-share-card" aria-label="公開版管理與分享">
-        <div>
-          <h3>公開版管理</h3>
-          <p class="hint">保留原專案的公開連結、分享介紹、PWA 快取狀態與維護工具。部署到 GitHub Pages 後可直接使用。</p>
-        </div>
-        <div class="tool-actions">
-          <button id="btnCopyPublicLink" class="ghost" type="button">複製公開網址</button>
-          <button id="btnCopyPublicIntro" class="ghost" type="button">分享介紹文</button>
-          <button id="btnOpenPublicStatus" class="ghost" type="button">檢查公開狀態</button>
-        </div>
-      </div>
+          <div class="home-main-actions">
+            <button id="btnStartOffline" class="primary big" type="button">開始單人遊戲</button>
+            <button id="btnQuickBeginner" class="ghost" type="button">新手直接玩</button>
+          </div>
 
-      <div class="experience-card" aria-label="手機手感、音效與分享素材">
-        <div>
-          <h3>體驗細節</h3>
-          <p class="hint">手機覺得牌太小時可開大牌模式；也可測試音效/震動，或複製公開分享素材。</p>
-        </div>
-        <div class="experience-controls">
-          <label class="check compact-check"><input id="touchComfortToggle" type="checkbox" /> 手機大牌模式</label>
-          <label class="check compact-check"><input id="confirmPlayToggle" type="checkbox" /> 出牌前確認</label>
-          <label class="mini-field sound-profile-field">
-            <span>音效風格</span>
-            <select id="soundProfile">
-              <option value="soft">柔和</option>
-              <option value="classic">經典</option>
-              <option value="arcade">遊戲感</option>
-            </select>
-          </label>
-          <button id="btnTestSound" class="ghost" type="button">測試音效</button>
-          <button id="btnTestVibration" class="ghost" type="button">測試震動</button>
-          <button id="btnOpenShareKit" class="ghost" type="button">分享素材</button>
-        </div>
-      </div>
+          <details class="home-details" open>
+            <summary>單人設定</summary>
+            <div class="home-settings-grid">
+              <label class="mini-field">
+                <span>遊戲模式</span>
+                <select id="offlineMode">
+                  <option value="closed" selected>變體模式：四手暗牌</option>
+                  <option value="standard">標準模式：夢家亮牌</option>
+                </select>
+              </label>
+              <label class="mini-field">
+                <span>身價</span>
+                <select id="offlineVulnerability">
+                  <option value="cycle" selected>依牌號循環</option>
+                  <option value="none">雙方無身價</option>
+                  <option value="ns">南北有身價</option>
+                  <option value="ew">東西有身價</option>
+                  <option value="both">雙方有身價</option>
+                </select>
+              </label>
+              <label class="mini-field">
+                <span>電腦難度</span>
+                <select id="offlineDifficulty">
+                  <option value="6">6 輕鬆</option>
+                  <option value="10" selected>10 一般</option>
+                  <option value="15">15 困難</option>
+                  <option value="20">20 專家</option>
+                </select>
+              </label>
+              <label class="mini-field">
+                <span>遊戲節奏</span>
+                <select id="offlinePacing">
+                  <option value="800">0.8 秒｜快速</option>
+                  <option value="1200">1.2 秒｜偏快</option>
+                  <option value="2000" selected>2 秒｜標準</option>
+                  <option value="3000">3 秒｜看清楚</option>
+                  <option value="5000">5 秒｜教學慢速</option>
+                </select>
+              </label>
+              <label class="mini-field">
+                <span>計分模式</span>
+                <select id="offlineScoringMode">
+                  <option value="single" selected>單副練習</option>
+                  <option value="chicago4">Chicago 4 副制</option>
+                  <option value="chicago8">Chicago 8 副制</option>
+                  <option value="chicago12">Chicago 12 副制</option>
+                  <option value="chicago16">Chicago 16 副制</option>
+                </select>
+              </label>
+            </div>
+            <div class="button-row compact-actions">
+              <button id="btnQuickStandard" class="ghost" type="button">標準單人局</button>
+              <button id="btnQuickClosed" class="ghost" type="button">閉手四人變體</button>
+            </div>
+          </details>
+        </section>
 
-      <div class="quick-start">
-        <div>
-          <h3>單人離線</h3>
-          <p class="hint">不用登入、不用房號，直接以南家玩家＋3 位電腦開始。本局只在此裝置進行。</p>
-        </div>
-        <div class="quick-actions">
-          <label class="mini-field">
-            <span>遊戲模式</span>
-            <select id="offlineMode">
-              <option value="closed" selected>變體模式：四手暗牌</option>
-              <option value="standard">標準模式：夢家亮牌</option>
-            </select>
-          </label>
-          <label class="mini-field">
-            <span>身價</span>
-            <select id="offlineVulnerability">
-              <option value="cycle" selected>依牌號循環</option>
-              <option value="none">雙方無身價</option>
-              <option value="ns">南北有身價</option>
-              <option value="ew">東西有身價</option>
-              <option value="both">雙方有身價</option>
-            </select>
-          </label>
-          <label class="mini-field">
-            <span>電腦難度</span>
-            <select id="offlineDifficulty">
-              <option value="6">6 輕鬆</option>
-              <option value="10" selected>10 一般</option>
-              <option value="15">15 困難</option>
-              <option value="20">20 專家</option>
-            </select>
-          </label>
-          <label class="mini-field">
-            <span>遊戲節奏</span>
-            <select id="offlinePacing">
-              <option value="800">0.8 秒｜快速</option>
-              <option value="1200">1.2 秒｜偏快</option>
-              <option value="2000" selected>2 秒｜標準</option>
-              <option value="3000">3 秒｜看清楚</option>
-              <option value="5000">5 秒｜教學慢速</option>
-            </select>
-          </label>
-          <label class="mini-field">
-            <span>計分模式</span>
-            <select id="offlineScoringMode">
-              <option value="single" selected>單副練習</option>
-              <option value="chicago4">Chicago 4 副制</option>
-                <option value="chicago8">Chicago 8 副制</option>
-                <option value="chicago12">Chicago 12 副制</option>
-                <option value="chicago16">Chicago 16 副制</option>
-            </select>
-          </label>
-          <button id="btnStartOffline" class="primary" type="button">單人離線開始</button>
-        </div>
-      </div>
+        <section class="home-card" aria-labelledby="homeMultiTitle">
+          <div class="home-card-head">
+            <span class="home-card-icon">👥</span>
+            <div>
+              <p class="eyebrow">Multiplayer</p>
+              <h3 id="homeMultiTitle">多人遊戲</h3>
+              <p class="hint compact">連線 Firebase 後建立房間、加入房間或觀戰。房間設定會在大廳內調整。</p>
+            </div>
+          </div>
 
-      <div class="ai-test-card">
-        <div>
-          <h3>AI 健康檢查</h3>
-          <p class="hint">快速跑全電腦測試，檢查叫牌是否能結束、打牌是否遵守跟牌、計分是否完成。</p>
-          <div class="ai-test-controls">
-            <label class="mini-field">
-              <span>測試局數</span>
-              <select id="aiTestRounds">
-                <option value="4" selected>4 局快速</option>
-                <option value="8">8 局標準</option>
-                <option value="16">16 局穩定</option>
-              </select>
+          <div class="grid two compact-grid">
+            <label class="field">
+              <span>你的暱稱</span>
+              <input id="playerName" maxlength="12" placeholder="例如：Fox" />
+            </label>
+            <label class="field">
+              <span>房號</span>
+              <input id="roomCode" maxlength="8" placeholder="留空可建立新房" />
             </label>
           </div>
-          <p id="aiTestStatus" class="ai-test-status">尚未執行測試。</p>
-        </div>
-        <button id="btnRunAiTest" class="ghost" type="button">執行 AI 測試</button>
-      </div>
+          <div class="button-row home-main-actions">
+            <button id="btnConnect" class="primary" type="button">連線 Firebase</button>
+            <button id="btnCreateRoom" class="primary" type="button" disabled>建立新房</button>
+            <button id="btnJoinRoom" class="ghost" type="button" disabled>加入房間</button>
+            <button id="btnJoinSpectator" class="ghost" type="button" disabled>觀戰加入</button>
+            <button id="btnQuickMultiplayer" class="ghost" type="button">邀請朋友</button>
+          </div>
+          <p id="connectStatus" class="hint compact">單人離線可直接開始；多人模式請先連線 Firebase。觀戰加入可在房間已滿或已開局時旁觀。</p>
+          <div class="config-note compact-note">
+            <b>Firebase</b>
+            <span>專案：napoleon-secretary-3。請確認 Anonymous 登入、Realtime Database 規則，以及 GitHub Pages 授權網域。</span>
+          </div>
+        </section>
 
-      <div class="tool-card">
-        <div>
-          <h3>系統測試工具</h3>
-          <p class="hint">檢查版本、PWA 快取、Service Worker、Firebase 狀態、瀏覽器功能與目前設定。</p>
-          <p id="diagnosticStatus" class="diagnostic-status">尚未執行系統測試。</p>
-        </div>
-        <button id="btnRunDiagnostics" class="ghost" type="button">執行系統測試</button>
-      </div>
+        <section class="home-card" aria-labelledby="homeHelpTitle">
+          <div class="home-card-head">
+            <span class="home-card-icon">📘</span>
+            <div>
+              <p class="eyebrow">Guide</p>
+              <h3 id="homeHelpTitle">說明</h3>
+              <p class="hint compact">查看新手導覽、玩法摘要、教學、版本更新與正式版測試清單。</p>
+            </div>
+          </div>
+          <div class="home-button-list">
+            <button id="btnOnboarding" class="ghost" type="button">新手導覽</button>
+            <button id="btnRules" class="ghost" type="button">玩法摘要</button>
+            <button id="btnOpenTutorial" class="ghost" type="button">玩法教學</button>
+            <button id="btnOpenReleaseNotes" class="ghost" type="button">本版更新</button>
+            <button id="btnOpenReleaseChecklist" class="ghost" type="button">正式版測試</button>
+            <button id="btnOpenPublicStatusTop" class="ghost" type="button">公開狀態</button>
+          </div>
+          <div class="home-mini-text">
+            <b>模式提示</b>
+            <p>標準模式是正式合約橋牌流程；變體模式取消夢家亮牌，四位玩家都只看自己的牌並自行出牌。</p>
+          </div>
+        </section>
 
-      <div class="tool-card stats-card">
-        <div>
-          <h3>本機統計與維護</h3>
-          <p class="hint">只記錄在這台裝置，可追蹤單人與多人勝敗、橋牌分數、模式偏好，也可匯出設定和錯誤回報。</p>
-          <div id="localStatsSummary" class="stats-summary" aria-live="polite">尚無本機統計。</div>
-          <div id="achievementSummary" class="achievement-summary" aria-live="polite"></div>
-        </div>
-        <div class="tool-actions">
-          <button id="btnShowLocalStats" class="ghost" type="button">更新統計</button>
-          <button id="btnShareStats" class="ghost" type="button">分享戰績</button>
-          <button id="btnShareAchievements" class="ghost" type="button">分享成就</button>
-          <button id="btnExportLocalData" class="ghost" type="button">匯出資料</button>
-          <button id="btnImportLocalData" class="ghost" type="button">還原資料</button>
-          <button id="btnCopyErrorReport" class="ghost" type="button">複製錯誤回報</button>
-          <button id="btnCopySupportBundle" class="ghost" type="button">複製維護包</button>
-          <button id="btnClearPwaCache" class="ghost" type="button">清除舊快取</button>
-          <button id="btnResetLocalData" class="ghost danger-ghost" type="button">重置本機資料</button>
-        </div>
-      </div>
+        <section class="home-card" aria-labelledby="homeSettingsTitle">
+          <div class="home-card-head">
+            <span class="home-card-icon">⚙️</span>
+            <div>
+              <p class="eyebrow">Settings</p>
+              <h3 id="homeSettingsTitle">其他設定</h3>
+              <p class="hint compact">外觀、提示、手機手感、音效、統計、維護與測試工具都收納在這裡。</p>
+            </div>
+          </div>
 
-      <div class="tool-card deploy-test-card">
-        <div>
-          <h3>實機測試與部署檢查</h3>
-          <p class="hint">v1.0.23 新增四座位視角模擬與 Firebase 部署檢查器。可用一台裝置切換 N/E/S/W 視角，或檢查 Auth、Database、私人手牌與 action queue 基礎路徑。</p>
-          <div id="deploymentCheckStatus" class="diagnostic-status deploy-check-status">尚未執行 Firebase 部署檢查。</div>
-        </div>
-        <div class="tool-actions">
-          <button id="btnStartSeatSimulator" class="ghost" type="button">四人視角模擬</button>
-          <button id="btnRunFirebaseDeployCheck" class="ghost" type="button">Firebase 部署檢查</button>
-        </div>
-      </div>
+          <details class="home-details" open>
+            <summary>外觀與操作</summary>
+            <div class="home-settings-grid">
+              <label class="theme-picker" for="themeSelect">
+                <span>主題</span>
+                <select id="themeSelect" aria-label="選擇主題風格">
+                  <option value="auto">自動（跟隨系統）</option>
+                  <option value="ocean">海洋風</option>
+                  <option value="eye-care">護眼風</option>
+                  <option value="e-ink">電子紙風</option>
+                  <option value="forest">森林風</option>
+                  <option value="grassland">草原風</option>
+                  <option value="sakura">櫻花風</option>
+                  <option value="twilight">暮光風</option>
+                </select>
+              </label>
+              <label class="mini-field sound-profile-field">
+                <span>音效風格</span>
+                <select id="soundProfile">
+                  <option value="soft">柔和</option>
+                  <option value="classic">經典</option>
+                  <option value="arcade">遊戲感</option>
+                </select>
+              </label>
+            </div>
+            <div class="settings-checks">
+              <label class="check compact-check"><input id="hintToggle" type="checkbox" /> 玩家提示</label>
+              <label class="check compact-check"><input id="soundToggle" type="checkbox" /> 音效</label>
+              <label class="check compact-check"><input id="vibrationToggle" type="checkbox" /> 震動</label>
+              <label class="check compact-check"><input id="touchComfortToggle" type="checkbox" /> 手機大牌模式</label>
+              <label class="check compact-check"><input id="confirmPlayToggle" type="checkbox" /> 出牌前確認</label>
+            </div>
+            <div class="button-row compact-actions">
+              <button id="btnTestSound" class="ghost" type="button">測試音效</button>
+              <button id="btnTestVibration" class="ghost" type="button">測試震動</button>
+            </div>
+          </details>
 
-      <h3 class="section-title">多人線上</h3>
-      <div class="grid two">
-        <label class="field">
-          <span>你的暱稱</span>
-          <input id="playerName" maxlength="12" placeholder="例如：Fox" />
-        </label>
-        <label class="field">
-          <span>房號</span>
-          <input id="roomCode" maxlength="8" placeholder="留空可建立新房" />
-        </label>
+          <details class="home-details">
+            <summary>統計與維護</summary>
+            <div id="localStatsSummary" class="stats-summary" aria-live="polite">尚無本機統計。</div>
+            <div id="achievementSummary" class="achievement-summary" aria-live="polite"></div>
+            <div class="button-row compact-actions">
+              <button id="btnShowLocalStats" class="ghost" type="button">更新統計</button>
+              <button id="btnShareStats" class="ghost" type="button">分享戰績</button>
+              <button id="btnShareAchievements" class="ghost" type="button">分享成就</button>
+              <button id="btnExportLocalData" class="ghost" type="button">匯出資料</button>
+              <button id="btnImportLocalData" class="ghost" type="button">還原資料</button>
+              <button id="btnCopyErrorReport" class="ghost" type="button">複製錯誤回報</button>
+              <button id="btnCopySupportBundle" class="ghost" type="button">複製維護包</button>
+              <button id="btnClearPwaCache" class="ghost" type="button">清除舊快取</button>
+              <button id="btnResetLocalData" class="ghost danger-ghost" type="button">重置本機資料</button>
+            </div>
+          </details>
+
+          <details class="home-details">
+            <summary>測試與公開版工具</summary>
+            <div class="home-tool-block">
+              <b>AI 健康檢查</b>
+              <div class="ai-test-controls">
+                <label class="mini-field">
+                  <span>測試局數</span>
+                  <select id="aiTestRounds">
+                    <option value="4" selected>4 局快速</option>
+                    <option value="8">8 局標準</option>
+                    <option value="16">16 局穩定</option>
+                  </select>
+                </label>
+                <button id="btnRunAiTest" class="ghost" type="button">執行 AI 測試</button>
+              </div>
+              <p id="aiTestStatus" class="ai-test-status">尚未執行測試。</p>
+            </div>
+            <div class="home-tool-block">
+              <b>系統與部署檢查</b>
+              <p id="diagnosticStatus" class="diagnostic-status">尚未執行系統測試。</p>
+              <div id="deploymentCheckStatus" class="diagnostic-status deploy-check-status">尚未執行 Firebase 部署檢查。</div>
+              <div class="button-row compact-actions">
+                <button id="btnRunDiagnostics" class="ghost" type="button">執行系統測試</button>
+                <button id="btnStartSeatSimulator" class="ghost" type="button">四人視角模擬</button>
+                <button id="btnRunFirebaseDeployCheck" class="ghost" type="button">Firebase 部署檢查</button>
+              </div>
+            </div>
+            <div class="button-row compact-actions">
+              <button id="btnCopyPublicLink" class="ghost" type="button">複製公開網址</button>
+              <button id="btnCopyPublicIntro" class="ghost" type="button">分享介紹文</button>
+              <button id="btnOpenShareKit" class="ghost" type="button">分享素材</button>
+              <button id="btnOpenPublicStatus" class="ghost" type="button">檢查公開狀態</button>
+            </div>
+          </details>
+        </section>
       </div>
-      <div class="config-note">
-        <b>Firebase 已沿用原專案設定</b>
-        <span>專案：napoleon-secretary-3。多人模式請確認 Firebase Anonymous 登入、Realtime Database 規則，以及 GitHub Pages 授權網域。</span>
-      </div>
-      <div class="button-row">
-        <button id="btnConnect" class="primary" type="button">連線 Firebase</button>
-        <button id="btnCreateRoom" class="primary" type="button" disabled>建立新房</button>
-        <button id="btnJoinRoom" class="ghost" type="button" disabled>加入房間</button>
-        <button id="btnJoinSpectator" class="ghost" type="button" disabled>觀戰加入</button>
-      </div>
-      <p id="connectStatus" class="hint">單人離線可直接開始；多人模式請先連線 Firebase。觀戰加入可在房間已滿或已開局時旁觀。</p>
     </section>
 
     <section id="lobbyView" class="card hidden">
@@ -569,6 +578,7 @@
         <p class="eyebrow">Release</p>
         <h2>本版更新</h2>
         <ul>
+          <li>v1.0.24.9：首頁簡化為「單人遊戲、多人遊戲、說明、其他設定」四大區塊，主要入口更清楚。</li>
           <li>v1.0.23：新增四人座位視角模擬、Firebase 部署檢查器、出牌 AI 第三版、正式大廳與新手教學第三章。</li>
           <li class="old-note">v1.0.22：Firebase rules 正式強化，私人手牌、action queue 與房主/仲裁者權限分流更清楚。</li>
           <li>房主 / 仲裁者轉移再強化：房主離線超過安全等待時間後，新仲裁者用交易式寫入接手，降低雙房主風險。</li>
@@ -725,6 +735,6 @@
     <footer id="versionFooter" class="version-footer"></footer>
     <div id="toast" class="toast hidden"></div>
   </div>
-  <script type="module" src="app.js?v=1.0.24.8"></script>
+  <script type="module" src="app.js?v=1.0.24.9"></script>
 </body>
 </html>
