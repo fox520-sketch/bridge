@@ -881,7 +881,7 @@ button .suit-symbol.black,
   .card { padding-bottom: calc(1rem + env(safe-area-inset-bottom)); }
 }
 
-/* v1.0.24.7: contextual focus UI */
+/* v1.0.24.8: AI bidding guardrails */
 #gameView.context-auction .scoreboard,
 #gameView.context-auction #dealProgress,
 #gameView.context-auction #gameRoomStatus,

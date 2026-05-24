@@ -1,5 +1,5 @@
-const BUILD = "bridge-v1.0.24.7-context-focused-ui";
-const ROOM_SCHEMA_VERSION = 65;
+const BUILD = "bridge-v1.0.24.8-ai-bidding-guardrails";
+const ROOM_SCHEMA_VERSION = 66;
 const SEATS = [
   { id: 0, key: "N", name: "北", team: "NS" },
   { id: 1, key: "E", name: "東", team: "EW" },
@@ -2064,70 +2064,114 @@ function naturalCallDecision(game, seat, lobby = {}) {
   const hand = game.hands?.[seat] || [];
   const hcp = handHcp(hand);
   const shape = suitLengths(hand);
-  const high = highestBid(game.auction || []);
+  const auction = listFromFirebase(game.auction || []);
+  const high = highestBid(auction);
+  const doubledState = currentDoubled(auction);
   const difficulty = Number(lobby?.settings?.difficulty || 12);
   const bid = (level, suit) => legal.find((c) => c.type === "bid" && c.level === level && c.suit === suit);
-  const firstLegalBid = () => legal.find((c) => c.type === "bid");
+  const legalDouble = () => legal.find((c) => c.type === "double");
+  const legalRedouble = () => legal.find((c) => c.type === "redouble");
   const pass = (reason) => ({ call: { type: "pass" }, reason });
   const choose = (call, reason) => ({ call: call || { type: "pass" }, reason });
   const longestSuit = preferredOpeningSuit(hand);
   const majors = ["S", "H"].filter((suit) => shape[suit] >= 5).sort((a, b) => shape[b] - shape[a] || suitHcp(hand, b) - suitHcp(hand, a));
   const sixSuit = ["S", "H", "D", "C"].find((suit) => shape[suit] >= 6);
   const team = teamOf(seat);
+  const lastMine = [...auction].reverse().find((c) => c.seat === seat);
+  const alreadyDoubled = auction.some((c) => c.seat === seat && c.type === "double");
 
   if (!high) {
-    if (hcp >= 22 && bid(2, "C")) return choose(bid(2, "C"), `強牌 ${hcp} HCP，使用強 2♣ 開叫，表示有滿貫或成局潛力。`);
+    if (hcp >= 22 && bid(2, "C")) return choose(bid(2, "C"), `強牌 ${hcp} HCP，使用強 2♣ 開叫。`);
     if (isBalanced(hand) && hcp >= 20 && hcp <= 21 && bid(2, "NT")) return choose(bid(2, "NT"), `均型 ${hcp} HCP，符合 20–21 點 2NT 開叫。`);
     if (isBalanced(hand) && hcp >= 15 && hcp <= 17 && bid(1, "NT")) return choose(bid(1, "NT"), `均型 ${hcp} HCP，符合 15–17 點 1NT 開叫。`);
     if (hcp >= 12 || (hcp >= 11 && (shape["S"] >= 5 || shape["H"] >= 5 || shape[longestSuit] >= 6))) {
       const suit = majors[0] || longestSuit;
-      return choose(bid(1, suit) || firstLegalBid(), `${hcp} HCP，牌型 ${shapeText(hand)}；自然制優先開五張高花，否則開最長花色 ${SUITS[suit].symbol}。`);
+      return choose(bid(1, suit), `${hcp} HCP，牌型 ${shapeText(hand)}；自然制開叫以一階長門為主，避免無根據跳叫。`);
     }
     if (difficulty >= 10 && sixSuit && shape[sixSuit] >= 6 && hcp >= 6 && hcp <= 10 && bid(2, sixSuit)) {
-      return choose(bid(2, sixSuit), `${hcp} HCP、${SUITS[sixSuit].symbol} 六張以上，採弱二開叫干擾對手。`);
+      return choose(bid(2, sixSuit), `${hcp} HCP、${SUITS[sixSuit].symbol} 六張以上，採弱二開叫。`);
     }
     const sevenSuit = ["S", "H", "D", "C"].find((suit) => shape[suit] >= 7);
     if (difficulty >= 12 && sevenSuit && hcp >= 5 && hcp <= 10 && bid(3, sevenSuit)) {
-      return choose(bid(3, sevenSuit), `${hcp} HCP、${SUITS[sevenSuit].symbol} 七張長門，採三階阻擊叫。`);
+      return choose(bid(3, sevenSuit), `${hcp} HCP、${SUITS[sevenSuit].symbol} 七張長門，三階阻擊。`);
     }
-    return pass(`${hcp} HCP 未達一般開叫牌力，先 Pass。`);
+    return pass(`${hcp} HCP 未達一般開叫牌力，Pass。`);
   }
 
-  const partnerHigh = teamOf(high.seat) === team;
   const highLevel = Number(high.level || 0);
   const highSuit = high.suit;
+  const partnerHigh = teamOf(high.seat) === team;
+  const selfHigh = high.seat === seat;
+
+  // 防止 AI 在自己已經是最高叫品時，因對手 Double 而無限把自己的合約抬高。
+  if (selfHigh) {
+    if (doubledState === 1 && legalRedouble() && hcp >= 15 && strongTrumpHolding(hand, highSuit)) {
+      return choose(legalRedouble(), `自己方合約被 Double；${hcp} HCP 且 ${SUITS[highSuit]?.symbol || ""} 控制佳，選擇 Redouble。`);
+    }
+    return pass(`目前最高叫品已是自己叫的 ${callText(high)}；不自動加叫自己的合約，避免把合約抬太高。`);
+  }
+
   if (partnerHigh) {
+    const underPressure = doubledState === 1;
     if (highSuit !== "NT") {
       const support = shape[highSuit] || 0;
       const isMajor = highSuit === "S" || highSuit === "H";
       const supportFit = support >= (isMajor ? 3 : 4);
+      if (underPressure && legalRedouble() && hcp >= 10 && hcp <= 15 && highLevel <= 2) {
+        return choose(legalRedouble(), `同伴合約被 Double；你有 ${hcp} HCP，先 Redouble 表示有牌力，不盲目跳高。`);
+      }
       if (supportFit) {
         const gameLevel = isMajor ? 4 : 5;
-        if (hcp >= 13 && bid(gameLevel, highSuit)) return choose(bid(gameLevel, highSuit), `${hcp} HCP 且有 ${support} 張 ${SUITS[highSuit].symbol} 支持，估計我方有成局，直接叫成局。`);
-        if (hcp >= 10 && bid(Math.min(gameLevel - 1, highLevel + 2), highSuit)) return choose(bid(Math.min(gameLevel - 1, highLevel + 2), highSuit), `${hcp} HCP 且有 ${support} 張支持，作邀請性加叫。`);
-        if (hcp >= 6 && bid(highLevel + 1, highSuit)) return choose(bid(highLevel + 1, highSuit), `${hcp} HCP 且有 ${support} 張支持，簡單加叫同伴花色。`);
+        if (!underPressure && hcp >= 13 && highLevel <= 2 && bid(gameLevel, highSuit)) {
+          return choose(bid(gameLevel, highSuit), `${hcp} HCP 且有 ${support} 張支持，未受干擾時可直接叫成局。`);
+        }
+        if (!underPressure && hcp >= 10 && highLevel <= 2 && bid(Math.min(gameLevel - 1, highLevel + 2), highSuit)) {
+          return choose(bid(Math.min(gameLevel - 1, highLevel + 2), highSuit), `${hcp} HCP 且有 ${support} 張支持，作邀請性加叫。`);
+        }
+        if (hcp >= 6 && highLevel <= 2 && bid(highLevel + 1, highSuit)) {
+          return choose(bid(highLevel + 1, highSuit), `${hcp} HCP 且有 ${support} 張支持，只做一階簡單加叫。`);
+        }
+        if (hcp >= 15 && highLevel === 3 && bid(gameLevel, highSuit)) {
+          return choose(bid(gameLevel, highSuit), `${hcp} HCP、支持充足，三階以上只在明顯強牌時加到成局。`);
+        }
       }
       const newSuit = responseSuit(hand, highSuit);
-      if (hcp >= 10 && newSuit && bid(Math.max(1, highLevel), newSuit)) return choose(bid(Math.max(1, highLevel), newSuit), `${hcp} HCP，未找到足夠支持，先叫自己的長門 ${SUITS[newSuit].symbol}。`);
-      if (isBalanced(hand) && hcp >= 12 && bid(3, "NT")) return choose(bid(3, "NT"), `${hcp} HCP 均型且未配合高花，考慮 3NT 成局。`);
-      if (isBalanced(hand) && hcp >= 8 && bid(2, "NT")) return choose(bid(2, "NT"), `${hcp} HCP 均型，2NT 邀請同伴成局。`);
+      const responseLevel = newSuit ? cheapestLevelForSuitOver(high, newSuit) : 8;
+      if (!underPressure && hcp >= 10 && newSuit && responseLevel <= 2 && bid(responseLevel, newSuit)) {
+        return choose(bid(responseLevel, newSuit), `${hcp} HCP，先叫自己的可叫長門 ${SUITS[newSuit].symbol}。`);
+      }
+      if (!underPressure && isBalanced(hand) && hcp >= 12 && highLevel <= 2 && bid(3, "NT")) return choose(bid(3, "NT"), `${hcp} HCP 均型，考慮 3NT 成局。`);
+      if (!underPressure && isBalanced(hand) && hcp >= 8 && highLevel <= 1 && bid(2, "NT")) return choose(bid(2, "NT"), `${hcp} HCP 均型，2NT 邀請。`);
     } else {
-      if (hcp >= 10 && bid(3, "NT")) return choose(bid(3, "NT"), `同伴已叫 NT，你有 ${hcp} HCP，合計大約有成局牌力，叫 3NT。`);
-      if (hcp >= 8 && bid(2, "NT")) return choose(bid(2, "NT"), `同伴 NT 後你有 ${hcp} HCP，2NT 邀請成局。`);
+      if (hcp >= 10 && highLevel <= 2 && bid(3, "NT")) return choose(bid(3, "NT"), `同伴已叫 NT，你有 ${hcp} HCP，叫 3NT。`);
+      if (hcp >= 8 && highLevel === 1 && bid(2, "NT")) return choose(bid(2, "NT"), `同伴 NT 後你有 ${hcp} HCP，2NT 邀請。`);
       const major = majors[0];
-      if (major && hcp >= 8 && bid(2, major)) return choose(bid(2, major), `同伴 NT 後你有五張高花 ${SUITS[major].symbol}，先尋找高花合約。`);
+      if (major && hcp >= 8 && highLevel === 1 && bid(2, major)) return choose(bid(2, major), `同伴 NT 後有五張高花 ${SUITS[major].symbol}，尋找高花合約。`);
     }
-    return pass(`${hcp} HCP，目前已由同伴掌握叫牌；沒有足夠牌力或配合，Pass。`);
+    return pass(`${hcp} HCP；同伴已掌握合約，現在不再無謂加高。`);
   }
 
-  if (hcp >= 16 && legal.some((c) => c.type === "double")) return choose({ type: "double" }, `${hcp} HCP，對手叫牌後以 Double 表示強牌或可防守。`);
+  // 對手最高叫品：競叫要保守，Double 必須像樣，且避免同一 AI 反覆 Double。
   const overcallSuit = preferredOvercallSuit(hand, highSuit);
-  if (overcallSuit && hcp >= 8) {
+  if (overcallSuit && hcp >= 10) {
     const level = cheapestLevelForSuitOver(high, overcallSuit);
-    if (level <= 3 && bid(level, overcallSuit)) return choose(bid(level, overcallSuit), `${hcp} HCP 且 ${SUITS[overcallSuit].symbol} 長門，選擇 ${level}${SUITS[overcallSuit].symbol} 競叫。`);
+    const longEnough = shape[overcallSuit] >= (level >= 3 ? 6 : 5);
+    if (longEnough && level <= 2 && bid(level, overcallSuit)) {
+      return choose(bid(level, overcallSuit), `${hcp} HCP 且 ${SUITS[overcallSuit].symbol} 長門，二階以下安全競叫。`);
+    }
+    if (longEnough && level === 3 && hcp >= 12 && suitQuality(hand, overcallSuit) >= 2 && bid(level, overcallSuit)) {
+      return choose(bid(level, overcallSuit), `${hcp} HCP、${SUITS[overcallSuit].symbol} 六張且牌質足夠，三階競叫。`);
+    }
   }
   if (isBalanced(hand) && hcp >= 15 && hcp <= 18 && highLevel === 1 && bid(1, "NT")) return choose(bid(1, "NT"), `${hcp} HCP 均型，在一階競叫 1NT。`);
-  return pass(`${hcp} HCP，對手已有 ${callText(high)}；目前不宜冒險競叫，Pass。`);
+  if (!alreadyDoubled && canMakeTakeoutDouble(hand, highSuit, hcp, highLevel) && legalDouble()) {
+    return choose(legalDouble(), `${hcp} HCP，對手低階叫 ${SUITS[highSuit]?.symbol || "NT"}；短門且其他花色有支持，作 Takeout Double。`);
+  }
+  if (!alreadyDoubled && highLevel >= 4 && hcp >= 19 && legalDouble()) {
+    return choose(legalDouble(), `${hcp} HCP，對手高階合約，防守牌力很強才選擇懲罰性 Double。`);
+  }
+  if (alreadyDoubled || lastMine?.type === "double") return pass(`已經 Double 過，本輪避免反覆 Double，Pass。`);
+  return pass(`${hcp} HCP，對手已有 ${callText(high)}；沒有安全競叫或合格 Double，Pass。`);
 }
 
 function preferredOpeningSuit(hand) {
@@ -2143,6 +2187,24 @@ function responseSuit(hand, partnerSuit) {
 function preferredOvercallSuit(hand, opponentSuit) {
   const shape = suitLengths(hand);
   return ["S", "H", "D", "C"].filter((s) => s !== opponentSuit && shape[s] >= 5).sort((a, b) => shape[b] - shape[a] || suitHcp(hand, b) - suitHcp(hand, a))[0] || null;
+}
+function suitQuality(hand, suit) {
+  const ranks = new Set((hand || []).filter((c) => c.suit === suit).map((c) => c.rank));
+  return ["A", "K", "Q", "J", "10"].reduce((sum, rank) => sum + (ranks.has(rank) ? 1 : 0), 0);
+}
+function strongTrumpHolding(hand, suit) {
+  if (!suit || suit === "NT") return isBalanced(hand) && handHcp(hand) >= 16;
+  const shape = suitLengths(hand);
+  return (shape[suit] || 0) >= 5 && suitQuality(hand, suit) >= 2;
+}
+function canMakeTakeoutDouble(hand, opponentSuit, hcp, level) {
+  if (!opponentSuit || opponentSuit === "NT" || level > 2 || hcp < 12) return false;
+  const shape = suitLengths(hand);
+  const shortOpponent = (shape[opponentSuit] || 0) <= 2;
+  const unbid = ["S", "H", "D", "C"].filter((s) => s !== opponentSuit);
+  const supportCount = unbid.filter((s) => shape[s] >= 3).length;
+  const majorSupport = ["S", "H"].filter((s) => s !== opponentSuit).some((s) => shape[s] >= 4);
+  return shortOpponent && supportCount >= 2 && (hcp >= 14 || majorSupport);
 }
 function cheapestLevelForSuitOver(high, suit) {
   for (let level = 1; level <= 7; level++) if (bidRank({ type: "bid", level, suit }) > bidRank(high)) return level;
@@ -4209,7 +4271,7 @@ function registerServiceWorker() {
     location.reload();
   });
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js?v=1.0.24.7", { updateViaCache: "none" }).then((registration) => {
+    navigator.serviceWorker.register("./service-worker.js?v=1.0.24.8", { updateViaCache: "none" }).then((registration) => {
       registration.update().catch(() => {});
       if (registration.waiting && navigator.serviceWorker.controller) {
         registration.waiting.postMessage({ type: "SKIP_WAITING" });
