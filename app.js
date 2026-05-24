@@ -1,4 +1,4 @@
-const BUILD = "bridge-v1.0.24.9-home-simplified";
+const BUILD = "bridge-v1.0.24.10-auction-table-badges";
 const ROOM_SCHEMA_VERSION = 66;
 const SEATS = [
   { id: 0, key: "N", name: "北", team: "NS" },
@@ -3292,6 +3292,30 @@ function callTextHtml(call) {
   if (call?.type === "bid") return `<span class="call-text ${suitColorClass(call.suit)}">${escapeHtml(call.level)}${suitSymbolHtml(call.suit)}</span>`;
   return `<span class="call-text">${escapeHtml(callText(call))}</span>`;
 }
+function sameBidCall(a, b) {
+  return Boolean(a && b && a.type === "bid" && b.type === "bid" && Number(a.seat) === Number(b.seat) && Number(a.level) === Number(b.level) && a.suit === b.suit);
+}
+function auctionSeatCallsHtml(game, seat) {
+  const auction = listFromFirebase(game?.auction || []);
+  const callsForSeat = auction.filter((call) => Number(call?.seat) === Number(seat));
+  if (!callsForSeat.length) return "";
+  const high = highestBid(auction);
+  let shown = callsForSeat.slice(-4);
+  if (high && Number(high.seat) === Number(seat) && !shown.some((call) => sameBidCall(call, high))) shown = [high, ...shown.slice(-3)];
+  const lastIndex = shown.length - 1;
+  const tokens = shown.map((call, idx) => {
+    const isHigh = sameBidCall(call, high);
+    const cls = ["auction-seat-token", `call-${call?.type || "unknown"}`, idx === lastIndex ? "latest" : "", isHigh ? "highest" : ""].filter(Boolean).join(" ");
+    return `<span class="${cls}">${callTextHtml(call)}${isHigh ? `<em>目前最高</em>` : ""}</span>`;
+  }).join("");
+  const hasHigh = high && Number(high.seat) === Number(seat);
+  return `<div class="auction-seat-badge ${hasHigh ? "has-highest" : ""}" aria-label="${seatName(seat)}叫牌">${tokens}</div>`;
+}
+function auctionCenterStatusHtml(game, high = highestBid(game?.auction || [])) {
+  if (!game?.auction?.length) return `<span class="pill auction-status-pill">尚未叫牌</span>`;
+  const status = high ? `目前最高：${seatName(high.seat)} ${callTextHtml(high)}` : "目前尚未有人叫牌";
+  return `<span class="pill auction-status-pill">${status}</span>`;
+}
 function renderGameRoomStatus(room) {
   const el = $("gameRoomStatus");
   if (!el) return;
@@ -3373,15 +3397,25 @@ function renderTable(room) {
       <div class="seat-meta">${escapeHtml(player?.name || "空位")}｜${teamOf(seat)}｜${isVulnerable(game.vulnerability, teamOf(seat)) ? "有身價" : "無身價"}｜手牌 ${displayCount}｜本方 ${game.tricksWon?.[teamOf(seat)] || 0} 墩</div>
       <div class="seat-tags">${tags.join("")}</div>${mini}
     `;
-    const liveWinningPlay = currentWinningPlay(game.currentTrick || [], game.contract?.suit);
-    const play = (game.currentTrick || []).find((p) => p.seat === seat);
     const playEl = $(`play${seat}`);
-    const isWinningCard = Boolean(play && liveWinningPlay && play.seat === liveWinningPlay.seat && play.card?.id === liveWinningPlay.card?.id);
-    playEl.innerHTML = play ? cardHtml(play.card, { small: false, winning: isWinningCard }) : "";
+    if (game.phase === "auction") {
+      playEl.innerHTML = auctionSeatCallsHtml(game, seat);
+    } else {
+      const liveWinningPlay = currentWinningPlay(game.currentTrick || [], game.contract?.suit);
+      const play = (game.currentTrick || []).find((p) => p.seat === seat);
+      const isWinningCard = Boolean(play && liveWinningPlay && play.seat === liveWinningPlay.seat && play.card?.id === liveWinningPlay.card?.id);
+      playEl.innerHTML = play ? cardHtml(play.card, { small: false, winning: isWinningCard }) : "";
+    }
   }
   const liveWinner = currentWinningPlay(game.currentTrick || [], game.contract?.suit);
-  $("trickArea").innerHTML = game.phase === "trickPause" && game.pendingTrick ?  `<span class="pill winning-pill">本墩完成｜${seatName(game.pendingTrick.winner)} 贏，${currentWaitInfo(game, room).countdownText || "即將清桌"}</span>` : (game.currentTrick?.length ? `<span class="pill winning-pill">本墩 ${game.currentTrick.length}/4｜目前最大：${seatName(liveWinner?.seat)} ${liveWinner?.card ? cardTextHtml(liveWinner.card) : ""}</span>` : `<span class="pill">等待出牌</span>`);
-  $("kittyArea").innerHTML = game.phase === "auction" ? auctionSummaryHtml(game.auction) : "";
+  if (game.phase === "auction") {
+    const high = highestBid(game.auction || []);
+    $("trickArea").innerHTML = `<span class="pill auction-turn-pill">輪到 ${seatName(game.currentPlayer)} 叫牌</span>`;
+    $("kittyArea").innerHTML = auctionCenterStatusHtml(game, high);
+  } else {
+    $("trickArea").innerHTML = game.phase === "trickPause" && game.pendingTrick ?  `<span class="pill winning-pill">本墩完成｜${seatName(game.pendingTrick.winner)} 贏，${currentWaitInfo(game, room).countdownText || "即將清桌"}</span>` : (game.currentTrick?.length ? `<span class="pill winning-pill">本墩 ${game.currentTrick.length}/4｜目前最大：${seatName(liveWinner?.seat)} ${liveWinner?.card ? cardTextHtml(liveWinner.card) : ""}</span>` : `<span class="pill">等待出牌</span>`);
+    $("kittyArea").innerHTML = "";
+  }
 }
 function isSeatHandVisible(game, seat, mySeat) {
   if (appState.spectator) return game.phase === "scoring" || (game.mode === "standard" && game.dummyVisible && seat === game.dummy);

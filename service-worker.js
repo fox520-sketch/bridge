@@ -1,4 +1,4 @@
-const CACHE_NAME = "contract-bridge-v1-0-24-9-home-simplified";
+const CACHE_NAME = "contract-bridge-v1-0-24-10-auction-table-badges";
 const ASSETS = [
   "./",
   "./index.html?v=1.0.24.9",
