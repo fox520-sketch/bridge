@@ -28,7 +28,7 @@ async function reset(){
     }
     status.textContent='完成，正在重新開啟最新版...';
     const base=location.pathname.replace(/cache-reset\.html$/,'');
-    setTimeout(()=>location.replace(base+'?fresh=1.0.24.5-'+Date.now()),500);
+    setTimeout(()=>location.replace(base+'?fresh=1.0.24.7-'+Date.now()),500);
   }catch(err){
     status.textContent='清除失敗：'+(err&&err.message?err.message:String(err));
   }

@@ -1,10 +1,10 @@
-const CACHE_NAME = "contract-bridge-v1-0-24-6-win-lose-animation";
+const CACHE_NAME = "contract-bridge-v1-0-24-7-context-focused-ui";
 const ASSETS = [
   "./",
-  "./index.html?v=1.0.24.5",
-  "./style.css?v=1.0.24.5",
-  "./app.js?v=1.0.24.5",
-  "./manifest.webmanifest?v=1.0.24.5",
+  "./index.html?v=1.0.24.7",
+  "./style.css?v=1.0.24.7",
+  "./app.js?v=1.0.24.7",
+  "./manifest.webmanifest?v=1.0.24.7",
   "./icons/icon-192.png",
   "./icons/icon-512.png"
 ];
@@ -34,7 +34,7 @@ self.addEventListener("fetch", (event) => {
         }
         return response;
       })
-      .catch(() => caches.match(request).then((cached) => cached || caches.match("./index.html?v=1.0.24.5") || caches.match("./index.html")))
+      .catch(() => caches.match(request).then((cached) => cached || caches.match("./index.html?v=1.0.24.7") || caches.match("./index.html")))
   );
 });
 

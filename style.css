@@ -880,3 +880,78 @@ button .suit-symbol.black,
   .hand-panel { position: sticky; bottom: env(safe-area-inset-bottom); z-index: 20; }
   .card { padding-bottom: calc(1rem + env(safe-area-inset-bottom)); }
 }
+
+/* v1.0.24.7: contextual focus UI */
+#gameView.context-auction .scoreboard,
+#gameView.context-auction #dealProgress,
+#gameView.context-auction #gameRoomStatus,
+#gameView.context-auction #gameHostTools,
+#gameView.context-auction #playerTips,
+#gameView.context-auction [data-record-tab-btn]:not([data-record-tab-btn="auction"]),
+#gameView.context-auction [data-record-tab]:not([data-record-tab="auction"]) {
+  display: none !important;
+}
+#gameView.context-play [data-record-tab-btn]:not([data-record-tab-btn="tricks"]):not([data-record-tab-btn="review"]),
+#gameView.context-play [data-record-tab]:not([data-record-tab="tricks"]):not([data-record-tab="review"]),
+#gameView.context-play .game-tools-panel,
+#gameView.context-play #syncTestPanel,
+#gameView.context-play .log-record-panel {
+  display: none !important;
+}
+#gameView.context-play #gameHealthPanel { display: none !important; }
+#gameView.context-scoring .actions,
+#gameView.context-scoring #handActionPanel,
+#gameView.context-scoring #turnWaitCard {
+  display: none !important;
+}
+#gameView.context-auction .record-tabs,
+#gameView.context-play .record-tabs {
+  justify-content: flex-start;
+}
+#gameView.context-auction .right-panel,
+#gameView.context-play .right-panel {
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--line));
+}
+#gameView.context-auction .contract h3::after {
+  content: "（叫牌摘要）";
+  font-size: .75rem;
+  color: var(--muted);
+  font-weight: 700;
+  margin-left: .35rem;
+}
+#gameView.context-play .contract h3::after {
+  content: "（打牌摘要）";
+  font-size: .75rem;
+  color: var(--muted);
+  font-weight: 700;
+  margin-left: .35rem;
+}
+#gameView.context-auction #handAnalysis,
+#gameView.context-play #handAnalysis {
+  background: color-mix(in srgb, var(--panel-strong), transparent 10%);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: .55rem .7rem;
+}
+#gameView.context-auction .phase-card,
+#gameView.context-play .phase-card {
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  background: color-mix(in srgb, var(--accent), transparent 90%);
+}
+@media (max-width: 900px) {
+  #gameView.context-auction .right-panel.log-panel,
+  #gameView.context-play .right-panel.log-panel {
+    max-height: min(42dvh, 320px);
+  }
+  #gameView.context-auction .record-tabs button:not([data-record-tab-btn="auction"]),
+  #gameView.context-play .record-tabs button:not([data-record-tab-btn="tricks"]):not([data-record-tab-btn="review"]) {
+    display: none !important;
+  }
+  #gameView.context-auction .left-panel.panel,
+  #gameView.context-play .left-panel.panel {
+    gap: 8px;
+  }
+}
+#gameView.context-auction [data-record-tab="auction"] { display: block !important; }
+#gameView.context-play [data-record-tab="tricks"],
+#gameView.context-play [data-record-tab="review"] { display: block !important; }

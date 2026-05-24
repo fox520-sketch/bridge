@@ -1,4 +1,4 @@
-const BUILD = "bridge-v1.0.24.6-win-lose-animation";
+const BUILD = "bridge-v1.0.24.7-context-focused-ui";
 const ROOM_SCHEMA_VERSION = 65;
 const SEATS = [
   { id: 0, key: "N", name: "北", team: "NS" },
@@ -2406,6 +2406,7 @@ function renderLobby(room) {
 }
 function renderGame(room) {
   const game = normalizeGame(room.game);
+  applyGameContextFocus(game);
   renderPhase(game);
   renderContract(game);
   renderScore(game);
@@ -2426,6 +2427,33 @@ function renderGame(room) {
   renderTips(game, room);
   maybeShowResult(game);
 }
+function gameContextClassForPhase(phase) {
+  if (phase === "auction") return "context-auction";
+  if (["openingLead", "play", "trickPause"].includes(phase)) return "context-play";
+  if (phase === "scoring") return "context-scoring";
+  return "context-neutral";
+}
+function defaultRecordTabForPhase(phase) {
+  if (phase === "auction") return "auction";
+  if (["openingLead", "play", "trickPause"].includes(phase)) return "tricks";
+  if (phase === "scoring") return "review";
+  return "tools";
+}
+function applyGameContextFocus(game) {
+  const view = $("gameView");
+  if (!view) return;
+  const contextClass = gameContextClassForPhase(game?.phase);
+  view.classList.remove("context-auction", "context-play", "context-scoring", "context-neutral");
+  view.classList.add(contextClass);
+  view.dataset.phaseContext = contextClass.replace("context-", "");
+  const phaseKey = game?.phase || "none";
+  if (appState.lastContextPhase !== phaseKey) {
+    appState.lastContextPhase = phaseKey;
+    appState.mobileRecordTab = defaultRecordTabForPhase(phaseKey);
+    appState.recordsDrawerOpen = true;
+  }
+}
+
 function renderPhase(game) {
   const phaseMap = {
     auction: ["叫牌階段", `${seatName(game.currentPlayer)} 叫牌。`],
@@ -2441,25 +2469,46 @@ function renderPhase(game) {
   $("phaseHelp").innerHTML = colorizeSuitsHtml(help) + extra;
 }
 function renderContract(game) {
+  const phase = game?.phase || "";
   const lines = [];
-  lines.push(["模式", `${modeLabel(game.mode)}｜${scoreModeLabel(game.matchInfo?.mode || appState.room?.match?.mode || appState.room?.lobby?.settings?.scoringMode)}`]);
-  lines.push(["節奏", `AI / 收牌等待 ${pacingLabel(appState.room?.lobby?.settings)}`]);
-  lines.push(["牌號 / 身價", `第 ${game.boardNo} 副｜${vulnerabilityLabel(game.vulnerability)}`]);
-  if (game.contract) {
-    lines.push(["合約", contractText(game.contract, game.declarer)]);
-    lines.push(["莊家", seatName(game.declarer)]);
-    lines.push([game.mode === "standard" ? "夢家" : "同伴", game.mode === "standard" ? `${seatName(game.dummy)}${game.dummyVisible ? "（已亮牌）" : "（未亮牌）"}` : `${seatName(game.dummy)}（不亮牌）`]);
-    lines.push(["目標", `${6 + game.contract.level} 墩`]);
+  if (phase === "auction") {
+    lines.push(["模式", modeLabel(game.mode)]);
+    lines.push(["牌號 / 身價", `第 ${game.boardNo} 副｜${vulnerabilityLabel(game.vulnerability)}`]);
+    const high = highestBid(game.auction || []);
+    lines.push(["目前最高叫品", high ? `${callText(high)} by ${SEATS[high.seat]?.key || "?"}` : "尚未叫牌"]);
+    lines.push(["輪到", `${seatName(game.currentPlayer)} 叫牌`]);
+    lines.push(["提醒", "最後一個叫品後連續三家 Pass，合約才成立"]);
+  } else if (["openingLead", "play", "trickPause"].includes(phase)) {
+    lines.push(["合約", game.contract ? contractText(game.contract, game.declarer) : "尚未成立"]);
+    if (game.contract) {
+      lines.push(["王牌 / 無王", game.contract.suit === "NT" ? "NT 無王" : `${SUITS[game.contract.suit]?.symbol || ""}${SUITS[game.contract.suit]?.name || ""}`]);
+      lines.push(["莊家", seatName(game.declarer)]);
+      lines.push([game.mode === "standard" ? "夢家" : "同伴", game.mode === "standard" ? `${seatName(game.dummy)}${game.dummyVisible ? "（已亮牌）" : "（未亮牌）"}` : `${seatName(game.dummy)}（不亮牌）`]);
+      lines.push(["目標", `${6 + game.contract.level} 墩`]);
+    }
+    lines.push(["目前墩數", `南北 ${game.tricksWon.NS || 0}｜東西 ${game.tricksWon.EW || 0}`]);
+    const current = listFromFirebase(game.currentTrick);
+    if (current.length) lines.push(["本墩", `${current.length}/4 張｜首引 ${current[0].card.rank}${SUITS[current[0].card.suit]?.symbol || current[0].card.suit}`]);
   } else {
-    lines.push(["合約", "尚未成立"]);
+    lines.push(["模式", `${modeLabel(game.mode)}｜${scoreModeLabel(game.matchInfo?.mode || appState.room?.match?.mode || appState.room?.lobby?.settings?.scoringMode)}`]);
+    lines.push(["牌號 / 身價", `第 ${game.boardNo} 副｜${vulnerabilityLabel(game.vulnerability)}`]);
+    if (game.contract) {
+      lines.push(["合約", contractText(game.contract, game.declarer)]);
+      lines.push(["莊家", seatName(game.declarer)]);
+      lines.push([game.mode === "standard" ? "夢家" : "同伴", game.mode === "standard" ? `${seatName(game.dummy)}${game.dummyVisible ? "（已亮牌）" : "（未亮牌）"}` : `${seatName(game.dummy)}（不亮牌）`]);
+      lines.push(["結果", game.result?.summary || "已結算"]);
+    } else {
+      lines.push(["合約", "尚未成立"]);
+    }
+    lines.push(["目前墩數", `南北 ${game.tricksWon.NS || 0}｜東西 ${game.tricksWon.EW || 0}`]);
   }
-  lines.push(["目前墩數", `南北 ${game.tricksWon.NS || 0}｜東西 ${game.tricksWon.EW || 0}`]);
   $("contractInfo").innerHTML = lines.map(([k, v]) => `<div class="contract-row"><span>${escapeHtml(k)}</span><b>${colorizeSuitsHtml(v)}</b></div>`).join("");
   $("tableTrump").classList.toggle("hidden", !game.contract);
   $("tableTrump").innerHTML = game.contract ? colorizeSuitsHtml(contractText(game.contract, game.declarer)) : "";
-  $("tableTeamHeads").classList.toggle("hidden", false);
+  $("tableTeamHeads").classList.toggle("hidden", phase === "auction");
   $("tableTeamHeads").textContent = `墩數：南北 ${game.tricksWon.NS || 0}｜東西 ${game.tricksWon.EW || 0}`;
 }
+
 function renderScore(game) {
   const match = appState.room?.match || defaultMatchState(appState.room?.lobby?.settings || {});
   let boards = listFromFirebase(match.boards);
@@ -4160,7 +4209,7 @@ function registerServiceWorker() {
     location.reload();
   });
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js?v=1.0.24.5", { updateViaCache: "none" }).then((registration) => {
+    navigator.serviceWorker.register("./service-worker.js?v=1.0.24.7", { updateViaCache: "none" }).then((registration) => {
       registration.update().catch(() => {});
       if (registration.waiting && navigator.serviceWorker.controller) {
         registration.waiting.postMessage({ type: "SKIP_WAITING" });
