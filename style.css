@@ -1010,3 +1010,7 @@ button .suit-symbol.black,
   .home-main-actions .primary, .home-main-actions .ghost { width: 100%; }
   .home-hero .wave { display: none; }
 }
+
+.scoring-next-actions { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 16px; background: color-mix(in srgb, var(--accent), transparent 92%); }
+.scoring-next-actions .button-row { margin-top: 8px; }
+.scoring-next-actions .primary { box-shadow: 0 10px 22px rgba(16, 74, 108, .18); }

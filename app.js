@@ -1,4 +1,4 @@
-const BUILD = "bridge-v1.0.24.10-auction-table-badges";
+const BUILD = "bridge-v1.0.24.11-scoring-next-deal";
 const ROOM_SCHEMA_VERSION = 66;
 const SEATS = [
   { id: 0, key: "N", name: "北", team: "NS" },
@@ -2564,11 +2564,34 @@ function renderContract(game) {
     }
     lines.push(["目前墩數", `南北 ${game.tricksWon.NS || 0}｜東西 ${game.tricksWon.EW || 0}`]);
   }
-  $("contractInfo").innerHTML = lines.map(([k, v]) => `<div class="contract-row"><span>${escapeHtml(k)}</span><b>${colorizeSuitsHtml(v)}</b></div>`).join("");
+  const scoringActions = phase === "scoring" ? renderScoringNextDealActions() : "";
+  $("contractInfo").innerHTML = lines.map(([k, v]) => `<div class="contract-row"><span>${escapeHtml(k)}</span><b>${colorizeSuitsHtml(v)}</b></div>`).join("") + scoringActions;
+  attachScoringNextDealActions($("contractInfo"));
   $("tableTrump").classList.toggle("hidden", !game.contract);
   $("tableTrump").innerHTML = game.contract ? colorizeSuitsHtml(contractText(game.contract, game.declarer)) : "";
   $("tableTeamHeads").classList.toggle("hidden", phase === "auction");
   $("tableTeamHeads").textContent = `墩數：南北 ${game.tricksWon.NS || 0}｜東西 ${game.tricksWon.EW || 0}`;
+}
+
+
+function renderScoringNextDealActions() {
+  const canStart = appState.offline || isHost();
+  const disabled = canStart ? "" : " disabled";
+  const hint = canStart ? "本副已結束，可直接開始下一副。" : "本副已結束，請房主開始下一副。";
+  return `
+    <div class="scoring-next-actions">
+      <p class="hint compact">${escapeHtml(hint)}</p>
+      <div class="button-row compact-actions">
+        <button id="btnNextDealFromSummary" class="primary" type="button"${disabled}>下一副 / 再玩一副</button>
+        <button id="btnReplayFromSummary" class="ghost" type="button">牌局回放</button>
+      </div>
+    </div>
+  `;
+}
+function attachScoringNextDealActions(container) {
+  if (!container) return;
+  container.querySelector("#btnNextDealFromSummary")?.addEventListener("click", () => hostStartGame());
+  container.querySelector("#btnReplayFromSummary")?.addEventListener("click", () => openReplayDialog(currentGame()));
 }
 
 function renderScore(game) {
@@ -4305,7 +4328,7 @@ function registerServiceWorker() {
     location.reload();
   });
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js?v=1.0.24.10", { updateViaCache: "none" }).then((registration) => {
+    navigator.serviceWorker.register("./service-worker.js?v=1.0.24.11", { updateViaCache: "none" }).then((registration) => {
       registration.update().catch(() => {});
       if (registration.waiting && navigator.serviceWorker.controller) {
         registration.waiting.postMessage({ type: "SKIP_WAITING" });
